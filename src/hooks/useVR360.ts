@@ -10,12 +10,15 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import vr360Service from '../services/vr360Service';
+import { settingsService } from '../services/settingsService';
+import { appConfig } from '../config';
 import type {
   VR360Link,
   VR360ListParams,
   VR360CategoryType,
-  VrHotelSettingsResponse,
 } from '../types/api';
+import type { VRHotelSettingsResponse } from '../types/settings';
+import { browserJsonCache } from '../utils/browserJsonCache';
 
 // ===== HOOK TYPES =====
 interface UseVR360LinksResult {
@@ -315,14 +318,18 @@ export const useVR360Detail = (id: string): UseVR360DetailResult => {
  */
 
 // Cache cho VR Hotel Settings - persist across component unmounts
-const vrHotelSettingsCache = new Map<number, { data: VrHotelSettingsResponse; timestamp: number }>();
-const CACHE_DURATION = 5 * 60 * 1000; // 5 phút
+const vrHotelSettingsCache = new Map<string, { data: VRHotelSettingsResponse; timestamp: number }>();
+const CACHE_DURATION = appConfig.FRONTEND_CACHE_TTL_HOURS * 60 * 60 * 1000;
+
+const getVrHotelSettingsCacheScope = (propertyId: number | null) =>
+  `${appConfig.TENANT_CODE || 'default'}:${propertyId ?? appConfig.PROPERTY_ID ?? 'default'}`;
 
 export const useVrHotelSettings = (propertyId: number | null) => {
-  const [settings, setSettings] = useState<VrHotelSettingsResponse | null>(() => {
+  const cacheScope = getVrHotelSettingsCacheScope(propertyId);
+  const [settings, setSettings] = useState<VRHotelSettingsResponse | null>(() => {
     // Initialize từ cache nếu có
     if (propertyId) {
-      const cached = vrHotelSettingsCache.get(propertyId);
+      const cached = vrHotelSettingsCache.get(cacheScope);
       if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
         return cached.data;
       }
@@ -337,28 +344,38 @@ export const useVrHotelSettings = (propertyId: number | null) => {
       return;
     }
 
+    const cacheKey = `vr_hotel_settings_hook:v2:${cacheScope}`;
+
     // Check cache first
-    const cached = vrHotelSettingsCache.get(propertyId);
+    const cached = vrHotelSettingsCache.get(cacheScope);
     if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
       setSettings(cached.data);
-      return;
+      setLoading(false);
+    }
+
+    const cachedJson = browserJsonCache.get<VRHotelSettingsResponse>(cacheKey);
+    if (cachedJson) {
+      setSettings(cachedJson);
+      vrHotelSettingsCache.set(cacheScope, { data: cachedJson, timestamp: Date.now() });
+      setLoading(false);
     }
 
     setLoading(true);
     setError(null);
     try {
-      const data = await vr360Service.getVrHotelSettings({ propertyId });
+      const data = await settingsService.getVRHotelSettings(propertyId);
       setSettings(data);
       
       // Cache kết quả
-      vrHotelSettingsCache.set(propertyId, { data, timestamp: Date.now() });
+      vrHotelSettingsCache.set(cacheScope, { data, timestamp: Date.now() });
+      browserJsonCache.set(cacheKey, data, CACHE_DURATION);
     } catch (err) {
       console.error('[useVrHotelSettings] Error:', err);
       setError(err as Error);
     } finally {
       setLoading(false);
     }
-  }, [propertyId]);
+  }, [cacheScope, propertyId]);
 
   useEffect(() => {
     fetchSettings();

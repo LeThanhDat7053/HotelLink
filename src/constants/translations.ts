@@ -15,6 +15,7 @@ export interface MenuTranslations {
   policy: string;          // Chính sách
   contact: string;         // Liên hệ
   booking: string;         // Đặt phòng
+  call?: string;           // Gọi điện (nút contact của sale)
   gallery: string;         // Thư viện ảnh
   regulation: string;      // Nội quy khách sạn
   news: string;            // Tin tức & Sự kiện
@@ -92,6 +93,7 @@ export const MENU_TRANSLATIONS: Record<string, MenuTranslations> = {
     policy: 'CHÍNH SÁCH',
     contact: 'LIÊN HỆ',
     booking: 'ĐẶT PHÒNG',
+    call: 'Gọi điện',
     gallery: 'Thư viện ảnh',
     regulation: 'Nội quy khách sạn',
     news: 'Tin tức & Sự kiện',
@@ -165,6 +167,7 @@ export const MENU_TRANSLATIONS: Record<string, MenuTranslations> = {
     policy: 'POLICY',
     contact: 'CONTACT',
     booking: 'BOOK NOW',
+    call: 'Call',
     gallery: 'Gallery',
     regulation: 'Hotel Regulations',
     news: 'News & Events',

@@ -15,16 +15,16 @@ interface FacilityDetailProps {
   loading?: boolean;
   error?: Error | null;
   onBack: () => void;
-  onVrLinkChange?: (vrLink: string | null) => void;
+  onFacilityVrChange?: (targetId: string | null, panoramaUrl: string | null, vrLink: string | null) => void;
   className?: string;
 }
 
-export const FacilityDetail: FC<FacilityDetailProps> = memo(({ 
+export const FacilityDetail: FC<FacilityDetailProps> = memo(({
   facility,
   loading = false,
   error = null,
   onBack,
-  onVrLinkChange,
+  onFacilityVrChange,
   className = '',
 }) => {
   const screens = useBreakpoint();
@@ -45,16 +45,12 @@ export const FacilityDetail: FC<FacilityDetailProps> = memo(({
 
   // Đổi VR360 background khi vào chi tiết tiện ích
   useEffect(() => {
-    if (facility?.vrLink && onVrLinkChange) {
-      onVrLinkChange(facility.vrLink);
-    }
+    onFacilityVrChange?.(facility?.targetId ?? null, facility?.panoramaUrl ?? null, facility?.vrLink ?? null);
     // Cleanup: reset về null khi unmount
     return () => {
-      if (onVrLinkChange) {
-        onVrLinkChange(null);
-      }
+      onFacilityVrChange?.(null, null, null);
     };
-  }, [facility?.vrLink, onVrLinkChange]);
+  }, [facility?.id, facility?.targetId, facility?.panoramaUrl, facility?.vrLink, onFacilityVrChange]);
 
   // Container styles theo CSS được cung cấp
   const containerStyle: CSSProperties = {

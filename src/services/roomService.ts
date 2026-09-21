@@ -75,8 +75,9 @@ export const roomService = {
       .sort((a, b) => a.sort_order - b.sort_order);
     const galleryImages = galleryMedia.map(m => mediaService.getMediaViewUrl(m.media_id));
 
-    // Lấy VR link từ top level (room.vr_link), KHÔNG lấy từ attributes_json
     const vrLink = room.vr_link || null;
+    const targetId = room.target_id || null;
+    const panoramaUrl = room.panorama_url || null;
 
     // Lấy amenities từ translation.amenities_text (ưu tiên) hoặc amenities_json (fallback)
     let amenities: string[] = [];
@@ -105,7 +106,9 @@ export const roomService = {
       status: room.status,
       amenities,
       vrLink,
-      bookingUrl: room.booking_url, // URL đặt phòng riêng
+      targetId,
+      panoramaUrl,
+      bookingUrl: room.booking_url,
       primaryImage,
       galleryImages,
       displayOrder: room.display_order,

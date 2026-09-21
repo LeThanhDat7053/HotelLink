@@ -5,11 +5,13 @@ import { ArrowLeftOutlined } from '@ant-design/icons';
 import { useTheme } from '../../context/ThemeContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { usePropertyData } from '../../context/PropertyContext';
+import { useSale } from '../../context/SaleContext';
 import { useVrHotelSettings } from '../../hooks/useVR360';
 import { getMenuTranslations } from '../../constants/translations';
 import { ImageGalleryViewer } from './ImageGalleryViewer';
 import { BookingOptionsModal, getBookingBehavior } from './BookingOptionsModal';
 import { getBookingUrlWithMessage, createBookingMessage, copyToClipboard } from '../../utils/bookingHelper';
+import { resolveContact } from '../../utils/contactResolver';
 import type { ServiceUIData } from '../../types/service';
 
 const { useBreakpoint } = Grid;
@@ -19,23 +21,24 @@ interface ServiceDetailProps {
   loading?: boolean;
   error?: Error | null;
   onBack: () => void;
-  onVrLinkChange?: (vrLink: string | null) => void;
+  onServiceVrChange?: (targetId: string | null, panoramaUrl: string | null, vrLink: string | null) => void;
   className?: string;
 }
 
-export const ServiceDetail: FC<ServiceDetailProps> = memo(({ 
+export const ServiceDetail: FC<ServiceDetailProps> = memo(({
   service,
   loading = false,
   error = null,
   onBack,
-  onVrLinkChange,
-  className = '' 
+  onServiceVrChange,
+  className = ''
 }) => {
   const screens = useBreakpoint();
   const { primaryColor } = useTheme();
   const { locale } = useLanguage();
   const { propertyId } = usePropertyData();
   const { settings } = useVrHotelSettings(propertyId);
+  const { saleContact } = useSale();
   const t = getMenuTranslations(locale);
   const [galleryOpen, setGalleryOpen] = useState(false);
   const [galleryIndex, setGalleryIndex] = useState(0);
@@ -55,29 +58,41 @@ export const ServiceDetail: FC<ServiceDetailProps> = memo(({
   // Nếu chỉ có 1 option → redirect trực tiếp
   const handleBooking = async () => {
     const itemName = service?.name || '';
-    
-    // Lấy URLs từ settings
-    const messengerUrl = settings?.messenger_url;
-    const zaloPhone = settings?.phone_number;
-    // CHỈ dùng booking_url của service, KHÔNG fallback về settings
-    const bookingUrl = service?.bookingUrl;
-    
+
+    // Gộp contact: có sale (?ref=) thì dùng contact của sale, ngược lại của hotel.
+    const { messengerUrl, zaloPhone, phoneUrl, bookingUrl } = resolveContact(saleContact, {
+      messengerUrl: settings?.messenger_url,
+      zaloPhone: settings?.phone_number,
+      bookingUrl: service?.bookingUrl,
+    });
+
     // Check behavior: show modal hay redirect trực tiếp
     const { shouldShowModal, singleOption } = getBookingBehavior(
       messengerUrl,
       zaloPhone,
-      bookingUrl
+      bookingUrl,
+      phoneUrl
     );
-    
+
     // Nếu chỉ có 1 option → redirect trực tiếp
     if (!shouldShowModal && singleOption) {
       let finalUrl = singleOption.url;
-      
+
+      // Gọi điện: tel: → quay số; URL thường → mở tab mới
+      if (singleOption.type === 'phone') {
+        if (finalUrl.startsWith('tel:')) {
+          window.location.href = finalUrl;
+        } else {
+          window.open(finalUrl, '_blank', 'noopener,noreferrer');
+        }
+        return;
+      }
+
       // Xử lý Messenger - thêm pre-fill message
       if (singleOption.type === 'messenger') {
         finalUrl = getBookingUrlWithMessage(singleOption.url, itemName, t.wantToBook);
       }
-      
+
       // Xử lý Zalo - copy message và thêm ?text= parameter
       if (singleOption.type === 'zalo') {
         const bookingMessage = createBookingMessage(itemName, t.wantToBook);
@@ -88,33 +103,29 @@ export const ServiceDetail: FC<ServiceDetailProps> = memo(({
         const encodedMessage = encodeURIComponent(bookingMessage);
         finalUrl = `${singleOption.url}?text=${encodedMessage}`;
       }
-      
+
       window.open(finalUrl, '_blank', 'noopener,noreferrer');
       return;
     }
-    
+
     // Nếu có nhiều options → show modal
     if (shouldShowModal) {
       setBookingModalOpen(true);
       return;
     }
-    
+
     // Không có option nào
     console.warn('No booking URL available');
   };
 
   // Đổi VR360 background khi vào chi tiết dịch vụ
   useEffect(() => {
-    if (service?.vrLink && onVrLinkChange) {
-      onVrLinkChange(service.vrLink);
-    }
+    onServiceVrChange?.(service?.targetId ?? null, service?.panoramaUrl ?? null, service?.vrLink ?? null);
     // Cleanup: reset về null khi unmount
     return () => {
-      if (onVrLinkChange) {
-        onVrLinkChange(null);
-      }
+      onServiceVrChange?.(null, null, null);
     };
-  }, [service?.vrLink, onVrLinkChange]);
+  }, [service?.id, service?.targetId, service?.panoramaUrl, service?.vrLink, onServiceVrChange]);
 
   // Container styles theo CSS được cung cấp
   const containerStyle: CSSProperties = {
@@ -340,9 +351,11 @@ export const ServiceDetail: FC<ServiceDetailProps> = memo(({
       <BookingOptionsModal
         open={bookingModalOpen}
         onClose={() => setBookingModalOpen(false)}
-        messengerUrl={settings?.messenger_url}
-        zaloPhone={settings?.phone_number}
-        bookingUrl={service?.bookingUrl}
+        {...resolveContact(saleContact, {
+          messengerUrl: settings?.messenger_url,
+          zaloPhone: settings?.phone_number,
+          bookingUrl: service?.bookingUrl,
+        })}
         itemName={service?.name || ''}
         wantToBookText={t.wantToBook}
         messageCopiedText={t.messageCopied}

@@ -51,7 +51,9 @@ export function transformServiceForUI(
     
     // VR360
     vrLink: service.vr_link,
-    
+    targetId: service.target_id || null,
+    panoramaUrl: service.panorama_url || null,
+
     // Booking
     bookingUrl: service.booking_url,
     

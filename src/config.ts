@@ -38,6 +38,16 @@ declare global {
  */
 const serverConfig = typeof window !== 'undefined' ? window.__INITIAL_DATA__?._config : undefined;
 
+const validUrl = (value: string | undefined): string => {
+  if (!value) return "";
+  try {
+    const u = new URL(value);
+    return u.hostname ? value : "";
+  } catch {
+    return "";
+  }
+};
+
 export const appConfig = {
   // API Settings
   API_BASE_URL: serverConfig?.api_base || import.meta.env.VITE_API_BASE_URL || "",
@@ -53,7 +63,10 @@ export const appConfig = {
   
   // Additional Config
   VR360_CDN_URL: serverConfig?.vr360_cdn || import.meta.env.VITE_VR360_CDN_URL || "https://travel.link360.vn",
-  SITE_BASE_URL: serverConfig?.site_url || import.meta.env.VITE_SITE_BASE_URL || "",
+  PANORAMA_URL_DOMAIN: validUrl(serverConfig?.site_url) || import.meta.env.VITE_PANORAMA_URL_DOMAIN || "",
+  VR360_SCENE_SYNC_ENDPOINT: import.meta.env.VITE_VR360_SCENE_SYNC_ENDPOINT || "",
+  FRONTEND_CACHE_TTL_HOURS: Number(import.meta.env.VITE_FRONTEND_CACHE_TTL_HOURS || '12'),
+  SITE_BASE_URL: validUrl(serverConfig?.site_url) || import.meta.env.VITE_SITE_BASE_URL || "",
   APP_NAME: serverConfig?.app_name || import.meta.env.VITE_APP_NAME || "",
   
   // Legacy support

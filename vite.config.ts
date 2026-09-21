@@ -1,39 +1,80 @@
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
+import fs from 'node:fs';
+import path from 'node:path';
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
 
-// https://vite.dev/config/
+const serveStaticDirectory = (requestPath: string, directoryPath: string) => ({
+  name: `serve-${requestPath}`,
+  configureServer(server: import('vite').ViteDevServer) {
+    server.middlewares.use(requestPath, (req, res, next) => {
+      const rawRelativePath = req.url?.replace(requestPath, '') || '';
+      const relativePath = rawRelativePath.split('?')[0].split('#')[0];
+      const absolutePath = path.resolve(directoryPath, `.${relativePath}`);
+      const absoluteDirectoryPath = path.resolve(directoryPath);
+
+      if (!absolutePath.startsWith(absoluteDirectoryPath) || !fs.existsSync(absolutePath)) {
+        next();
+        return;
+      }
+
+      res.statusCode = 200;
+      res.end(fs.readFileSync(absolutePath));
+    });
+  },
+});
+
+const serveStaticAssetFile = (requestPath: string, assetPath: string) => ({
+  name: `serve-${requestPath}`,
+  configureServer(server: import('vite').ViteDevServer) {
+    server.middlewares.use(requestPath, (_req, res, next) => {
+      if (!fs.existsSync(assetPath)) {
+        next();
+        return;
+      }
+
+      res.statusCode = 200;
+      res.end(fs.readFileSync(assetPath));
+    });
+  },
+});
+
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react(),
+    serveStaticDirectory('/assets/vr-data', path.resolve(__dirname, 'dist/assets/vr-data')),
+    serveStaticAssetFile('/assets/js/panorama.js', path.resolve(__dirname, 'dist/assets/js/panorama.js')),
+  ],
   build: {
-    // Tối ưu chunk size
+    emptyOutDir: false,
     chunkSizeWarningLimit: 1000,
     rollupOptions: {
       output: {
-        // Manual chunks để tách code tốt hơn
         manualChunks: {
-          // Vendor chunks - libraries lớn
           'react-vendor': ['react', 'react-dom', 'react-router-dom'],
           'antd-vendor': ['antd', '@ant-design/icons'],
           'axios-vendor': ['axios'],
         },
-        // Tên file output
         chunkFileNames: 'assets/js/[name]-[hash].js',
         entryFileNames: 'assets/js/[name]-[hash].js',
         assetFileNames: 'assets/[ext]/[name]-[hash].[ext]',
       },
     },
-    // Minify để giảm size
-    minify: 'esbuild', // Dùng esbuild thay vì terser cho nhanh hơn
+    minify: 'esbuild',
   },
-  // Server optimization
   server: {
     hmr: {
-      overlay: false, // Tắt error overlay cho performance
+      overlay: false,
+    },
+    proxy: {
+      '/api/v1': {
+        target: 'https://travel.link360.vn',
+        changeOrigin: true,
+        secure: false,
+      },
     },
   },
-  // Preview optimization
   preview: {
     port: 4173,
     strictPort: false,
   },
-})
+});

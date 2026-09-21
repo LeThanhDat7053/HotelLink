@@ -26,8 +26,24 @@ const BookingIcon = ({ color }: { color: string }) => (
   </svg>
 );
 
+// Custom Phone Icon - Uses primaryColor from API (nút Gọi điện cho sale)
+const PhoneIcon = ({ color }: { color: string }) => (
+  <svg width="32" height="32" viewBox="0 0 24 24" fill={color} xmlns="http://www.w3.org/2000/svg" style={{ filter: `drop-shadow(0 3px 8px ${color}99)` }}>
+    <path d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z" />
+  </svg>
+);
+
+/**
+ * Chuẩn hoá phone thành tel: link (nếu chưa có prefix).
+ */
+export const toTelLink = (phone: string): string => {
+  const value = phone.trim();
+  if (value.startsWith('tel:') || value.startsWith('http')) return value;
+  return `tel:${value}`;
+};
+
 export interface BookingOption {
-  type: 'messenger' | 'zalo' | 'booking';
+  type: 'messenger' | 'zalo' | 'phone' | 'booking';
   url: string;
   label: string;
   icon: React.ReactNode;
@@ -39,6 +55,7 @@ interface BookingOptionsModalProps {
   itemName: string;
   messengerUrl?: string | null;
   zaloPhone?: string | null;
+  phoneUrl?: string | null;
   bookingUrl?: string | null;
   wantToBookText: string;
   messageCopiedText: string;
@@ -56,6 +73,7 @@ export const BookingOptionsModal: FC<BookingOptionsModalProps> = memo(({
   itemName,
   messengerUrl,
   zaloPhone,
+  phoneUrl,
   bookingUrl,
   wantToBookText,
   messageCopiedText,
@@ -71,10 +89,10 @@ export const BookingOptionsModal: FC<BookingOptionsModalProps> = memo(({
     // 1. Messenger
     if (messengerUrl && messengerUrl.trim() !== '') {
       // Nếu chỉ là ID/username, convert thành m.me URL
-      const messengerLink = messengerUrl.startsWith('http') 
-        ? messengerUrl 
+      const messengerLink = messengerUrl.startsWith('http')
+        ? messengerUrl
         : `https://m.me/${messengerUrl}`;
-      
+
       result.push({
         type: 'messenger',
         url: messengerLink,
@@ -86,10 +104,10 @@ export const BookingOptionsModal: FC<BookingOptionsModalProps> = memo(({
     // 2. Zalo (từ phone_number)
     if (zaloPhone && zaloPhone.trim() !== '') {
       // Nếu đã là URL đầy đủ, dùng trực tiếp; nếu không thì thêm prefix
-      const zaloLink = zaloPhone.startsWith('http') 
-        ? zaloPhone 
+      const zaloLink = zaloPhone.startsWith('http')
+        ? zaloPhone
         : `https://zalo.me/${zaloPhone}`;
-      
+
       result.push({
         type: 'zalo',
         url: zaloLink,
@@ -98,7 +116,17 @@ export const BookingOptionsModal: FC<BookingOptionsModalProps> = memo(({
       });
     }
 
-    // 3. Booking URL (Booking.com, website riêng, etc.)
+    // 3. Gọi điện (chỉ có khi referral qua sale)
+    if (phoneUrl && phoneUrl.trim() !== '') {
+      result.push({
+        type: 'phone',
+        url: toTelLink(phoneUrl),
+        label: t.call || 'Gọi điện',
+        icon: <PhoneIcon color={primaryColor} />,
+      });
+    }
+
+    // 4. Booking URL (Booking.com, website riêng, etc.)
     if (bookingUrl && bookingUrl.trim() !== '') {
       result.push({
         type: 'booking',
@@ -109,7 +137,7 @@ export const BookingOptionsModal: FC<BookingOptionsModalProps> = memo(({
     }
 
     return result;
-  }, [messengerUrl, zaloPhone, bookingUrl, t.booking, primaryColor]);
+  }, [messengerUrl, zaloPhone, phoneUrl, bookingUrl, t.booking, t.call, primaryColor]);
 
   // Handle click option
   const handleOptionClick = async (option: BookingOption) => {
@@ -133,6 +161,17 @@ export const BookingOptionsModal: FC<BookingOptionsModalProps> = memo(({
       // Thêm ?text= parameter (có thể work trên một số platform)
       const encodedMessage = encodeURIComponent(bookingMessage);
       finalUrl = `${option.url}?text=${encodedMessage}`;
+    }
+
+    // Gọi điện: tel: → mở trình quay số; nếu là URL thường thì mở tab mới
+    if (option.type === 'phone') {
+      if (finalUrl.startsWith('tel:')) {
+        window.location.href = finalUrl;
+      } else {
+        window.open(finalUrl, '_blank', 'noopener,noreferrer');
+      }
+      onClose();
+      return;
     }
 
     // Open URL
@@ -237,10 +276,18 @@ export const BookingOptionsModal: FC<BookingOptionsModalProps> = memo(({
     border: `1px solid ${primaryColor}50`,
   };
 
+  const phoneStyle: CSSProperties = {
+    ...optionButtonStyle,
+    background: 'rgba(0, 0, 0, 0.68)',
+    color: primaryColor,
+    border: `1px solid ${primaryColor}50`,
+  };
+
   const getButtonStyle = (type: BookingOption['type']): CSSProperties => {
     switch (type) {
       case 'messenger': return messengerStyle;
       case 'zalo': return zaloStyle;
+      case 'phone': return phoneStyle;
       case 'booking': return bookingStyle;
       default: return optionButtonStyle;
     }
@@ -305,13 +352,14 @@ export const BookingOptionsModal: FC<BookingOptionsModalProps> = memo(({
 export const getBookingBehavior = (
   messengerUrl?: string | null,
   zaloPhone?: string | null,
-  bookingUrl?: string | null
+  bookingUrl?: string | null,
+  phoneUrl?: string | null
 ): { shouldShowModal: boolean; singleOption: BookingOption | null; optionCount: number } => {
   const options: BookingOption[] = [];
 
   if (messengerUrl && messengerUrl.trim() !== '') {
-    const messengerLink = messengerUrl.startsWith('http') 
-      ? messengerUrl 
+    const messengerLink = messengerUrl.startsWith('http')
+      ? messengerUrl
       : `https://m.me/${messengerUrl}`;
     options.push({
       type: 'messenger',
@@ -323,13 +371,22 @@ export const getBookingBehavior = (
 
   if (zaloPhone && zaloPhone.trim() !== '') {
     // Nếu đã là URL đầy đủ, dùng trực tiếp; nếu không thì thêm prefix
-    const zaloLink = zaloPhone.startsWith('http') 
-      ? zaloPhone 
+    const zaloLink = zaloPhone.startsWith('http')
+      ? zaloPhone
       : `https://zalo.me/${zaloPhone}`;
     options.push({
       type: 'zalo',
       url: zaloLink,
       label: 'Zalo',
+      icon: null,
+    });
+  }
+
+  if (phoneUrl && phoneUrl.trim() !== '') {
+    options.push({
+      type: 'phone',
+      url: toTelLink(phoneUrl),
+      label: 'Gọi điện',
       icon: null,
     });
   }

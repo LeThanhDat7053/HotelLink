@@ -28,6 +28,7 @@ export { PropertyPostsContent } from './PropertyPostsContent';
 export { SEOMeta } from './SEOMeta';
 export { PageLoadingSpinner, SimpleLoadingSpinner } from './PageLoadingSpinner';
 export { LoadingScreen } from './LoadingScreen';
+export { ThreeDVistaBackground } from './ThreeDVistaBackground';
 
 export { default as VR360Viewer, VR360Modal, VR360Gallery } from './VR360Viewer';
 

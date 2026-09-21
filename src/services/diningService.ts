@@ -50,7 +50,9 @@ export function transformDiningForUI(
     
     // VR360
     vrLink: dining.vr_link,
-    
+    targetId: dining.target_id || null,
+    panoramaUrl: dining.panorama_url || null,
+
     // Booking
     bookingUrl: dining.booking_url,
     

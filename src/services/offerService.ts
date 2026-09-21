@@ -77,7 +77,9 @@ export function transformOfferForUI(
     
     // VR360
     vrLink: offer.vr_link,
-    
+    targetId: offer.target_id || null,
+    panoramaUrl: offer.panorama_url || null,
+
     // Meta
     displayOrder: offer.display_order,
     createdAt: offer.created_at,

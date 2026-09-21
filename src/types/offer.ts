@@ -24,6 +24,8 @@ export interface OfferResponse {
   applicable_room_types: string[];
   status: string; // 'active' | 'inactive'
   vr_link: string | null;
+  target_id: string | null;
+  panorama_url: string | null;
   display_order: number;
   translations: Record<string, OfferTranslations>;
   created_at: string;
@@ -59,7 +61,9 @@ export interface OfferUIData {
   
   // VR360
   vrLink: string | null;
-  
+  targetId: string | null;
+  panoramaUrl: string | null;
+
   // Meta
   displayOrder: number;
   createdAt: string;

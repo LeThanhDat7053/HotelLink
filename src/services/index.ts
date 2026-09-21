@@ -24,6 +24,7 @@ export { regulationService } from './regulationService';
 export { contactService } from './contactService';
 export { offerService } from './offerService';
 export { settingsService } from './settingsService';
+export { vr360SceneSyncService } from './vr360SceneSyncService';
 
 // Re-export api instance for direct use if needed
 export { default as api } from '../api';

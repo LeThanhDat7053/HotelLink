@@ -13,14 +13,16 @@ import type { FacilityUIData } from '../../types/facility';
 interface FacilityViewProps {
   className?: string;
   onTitleChange?: (title: string) => void;
-  onVrLinkChange?: (vrLink: string | null) => void; // Callback để thông báo vr_link cho parent
+  onFacilityVrChange?: (targetId: string | null, panoramaUrl: string | null, vrLink: string | null) => void;
+  onViewingDetailChange?: (isViewing: boolean) => void;
   initialCode?: string; // Code từ URL để hiển thị detail ngay khi load
 }
 
-export const FacilityView: FC<FacilityViewProps> = memo(({ 
+export const FacilityView: FC<FacilityViewProps> = memo(({
   className = '',
   onTitleChange,
-  onVrLinkChange,
+  onFacilityVrChange,
+  onViewingDetailChange,
   initialCode
 }) => {
   const [selectedFacilityId, setSelectedFacilityId] = useState<number | null>(null);
@@ -36,7 +38,8 @@ export const FacilityView: FC<FacilityViewProps> = memo(({
     if (!initialCode) {
       setSelectedFacilityId(null);
     }
-  }, [initialCode]);
+    onViewingDetailChange?.(!!initialCode);
+  }, [initialCode, onViewingDetailChange]);
 
   // Fetch facility detail by ID when clicked from list
   const { facility: facilityById, loading: loadingById, error: errorById } = useFacilityDetail({
@@ -54,8 +57,16 @@ export const FacilityView: FC<FacilityViewProps> = memo(({
     enabled: !!currentCode && (selectedFacilityId === null || selectedFacilityId <= 0),
   });
 
-  // Combine results - prefer facilityById if selected, fallback facilityByCode
-  const facility = selectedFacilityId && selectedFacilityId > 0 ? facilityById : facilityByCode;
+  // Combine results - prefer facilityById if selected, fallback facilityByCode.
+  // Chặn data cũ khi đổi item: bỏ qua nếu id/code không khớp để không emit VR cũ.
+  const facility =
+    selectedFacilityId && selectedFacilityId > 0
+      ? facilityById && facilityById.id === selectedFacilityId
+        ? facilityById
+        : null
+      : facilityByCode && (!currentCode || facilityByCode.code === currentCode)
+        ? facilityByCode
+        : null;
   const loading = selectedFacilityId && selectedFacilityId > 0 ? loadingById : loadingByCode;
   const error = selectedFacilityId && selectedFacilityId > 0 ? errorById : errorByCode;
 
@@ -66,8 +77,9 @@ export const FacilityView: FC<FacilityViewProps> = memo(({
     const newPath = getLocalizedPath(`${cleanPath}/${facility.code}`, locale);
     navigate(newPath, { replace: true });
     onTitleChange?.(facility.name);
-    onVrLinkChange?.(facility.vrLink);
-  }, [onTitleChange, onVrLinkChange, navigate, location.pathname, locale]);
+    onViewingDetailChange?.(true);
+    onFacilityVrChange?.(facility.targetId, facility.panoramaUrl, facility.vrLink);
+  }, [onTitleChange, onViewingDetailChange, onFacilityVrChange, navigate, location.pathname, locale]);
 
   const handleBack = useCallback(() => {
     setSelectedFacilityId(null);
@@ -77,8 +89,9 @@ export const FacilityView: FC<FacilityViewProps> = memo(({
     navigate(newPath, { replace: true });
     const t = getMenuTranslations(locale);
     onTitleChange?.(t.facilities);
-    onVrLinkChange?.(null);
-  }, [onTitleChange, onVrLinkChange, navigate, locale]);
+    onFacilityVrChange?.(null, null, null);
+    onViewingDetailChange?.(false);
+  }, [onTitleChange, onFacilityVrChange, onViewingDetailChange, navigate, locale]);
 
   // Update title when facility data changes
   useEffect(() => {
@@ -98,12 +111,12 @@ export const FacilityView: FC<FacilityViewProps> = memo(({
   // Show detail view when facility is selected (clicked from list)
   if (selectedFacilityId !== null && selectedFacilityId > 0) {
     return (
-      <FacilityDetail 
-        facility={facility} 
+      <FacilityDetail
+        facility={facility}
         loading={loading}
         error={error}
         onBack={handleBack}
-        onVrLinkChange={onVrLinkChange}
+        onFacilityVrChange={onFacilityVrChange}
         className={className}
       />
     );
@@ -112,12 +125,12 @@ export const FacilityView: FC<FacilityViewProps> = memo(({
   // Show detail view when code is in URL (page load with slug)
   if (currentCode) {
     return (
-      <FacilityDetail 
-        facility={facility} 
+      <FacilityDetail
+        facility={facility}
         loading={loading}
         error={error}
         onBack={handleBack}
-        onVrLinkChange={onVrLinkChange}
+        onFacilityVrChange={onFacilityVrChange}
         className={className}
       />
     );

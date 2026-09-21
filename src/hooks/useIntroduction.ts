@@ -16,6 +16,11 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { introductionService } from '../services/introductionService';
 import type { VRHotelIntroductionResponse, IntroductionContent } from '../types/api';
+import { browserJsonCache } from '../utils/browserJsonCache';
+import { appConfig } from '../config';
+
+const getIntroductionCacheScope = (propertyId: number | null) =>
+  `${appConfig.TENANT_CODE || 'default'}:${propertyId ?? appConfig.PROPERTY_ID ?? 'default'}`;
 
 interface UseIntroductionResult {
   introduction: VRHotelIntroductionResponse | null;
@@ -40,8 +45,15 @@ export const useIntroduction = (propertyId: number | null): UseIntroductionResul
     try {
       setLoading(true);
       setError(null);
+      const cacheKey = `introduction:v2:${getIntroductionCacheScope(propertyId)}`;
+      const cached = browserJsonCache.get<VRHotelIntroductionResponse>(cacheKey);
+      if (cached) {
+        setIntroduction(cached);
+        setLoading(false);
+      }
       const data = await introductionService.getIntroduction(propertyId);
       setIntroduction(data);
+      browserJsonCache.set(cacheKey, data, appConfig.FRONTEND_CACHE_TTL_HOURS * 60 * 60 * 1000);
     } catch (err) {
       console.error('[useIntroduction] Failed to fetch introduction:', err);
       setError(err instanceof Error ? err : new Error('Failed to fetch introduction'));

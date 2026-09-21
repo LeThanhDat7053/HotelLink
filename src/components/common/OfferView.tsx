@@ -13,14 +13,16 @@ import type { OfferUIData } from '../../types/offer';
 interface OfferViewProps {
   className?: string;
   onTitleChange?: (title: string) => void;
-  onVrLinkChange?: (vrLink: string | null) => void;
+  onOfferVrChange?: (targetId: string | null, panoramaUrl: string | null, vrLink: string | null) => void;
+  onViewingDetailChange?: (isViewing: boolean) => void;
   initialCode?: string; // Code từ URL để hiển thị detail ngay khi load
 }
 
-export const OfferView: FC<OfferViewProps> = memo(({ 
+export const OfferView: FC<OfferViewProps> = memo(({
   className = '',
   onTitleChange,
-  onVrLinkChange,
+  onOfferVrChange,
+  onViewingDetailChange,
   initialCode
 }) => {
   const [selectedOfferCode, setSelectedOfferCode] = useState<string | undefined>(initialCode);
@@ -32,30 +34,39 @@ export const OfferView: FC<OfferViewProps> = memo(({
   // Sync initialCode from props when URL changes
   useEffect(() => {
     setSelectedOfferCode(initialCode);
-  }, [initialCode]);
+    onViewingDetailChange?.(!!initialCode);
+  }, [initialCode, onViewingDetailChange]);
 
   // Fetch offer detail when selected
-  const { offer, loading, error } = useOfferDetail({
+  const { offer: offerRaw, loading, error } = useOfferDetail({
     propertyId: propertyId ?? undefined,
     code: selectedOfferCode || '',
     locale,
   });
+  // Chặn data cũ khi đổi ưu đãi: hook giữ offer trước trong lúc fetch offer mới
+  // → bỏ qua nếu code không khớp, tránh emit VR của offer cũ.
+  const offer =
+    offerRaw && (!selectedOfferCode || offerRaw.code === selectedOfferCode)
+      ? offerRaw
+      : null;
 
   const handleOfferClick = useCallback((offer: OfferUIData) => {
     setSelectedOfferCode(offer.code);
     const newPath = getLocalizedPath(`/uu-dai/${offer.code}`, locale);
     navigate(newPath, { replace: true });
     onTitleChange?.(offer.title);
-    onVrLinkChange?.(offer.vrLink);
-  }, [onTitleChange, onVrLinkChange, navigate, locale]);
+    onViewingDetailChange?.(true);
+    onOfferVrChange?.(offer.targetId, offer.panoramaUrl, offer.vrLink);
+  }, [onTitleChange, onViewingDetailChange, onOfferVrChange, navigate, locale]);
 
   const handleBack = useCallback(() => {
     setSelectedOfferCode(undefined);
     const newPath = getLocalizedPath('/uu-dai', locale);
     navigate(newPath, { replace: true });
     onTitleChange?.(t.offers);
-    onVrLinkChange?.(null);
-  }, [onTitleChange, onVrLinkChange, navigate, locale, t.offers]);
+    onOfferVrChange?.(null, null, null);
+    onViewingDetailChange?.(false);
+  }, [onTitleChange, onOfferVrChange, onViewingDetailChange, navigate, locale, t.offers]);
 
   // Update title when offer data changes
   useEffect(() => {
@@ -74,12 +85,12 @@ export const OfferView: FC<OfferViewProps> = memo(({
   // Show detail view when offer is selected
   if (selectedOfferCode) {
     return (
-      <OfferDetail 
-        offer={offer} 
+      <OfferDetail
+        offer={offer}
         loading={loading}
         error={error}
         onBack={handleBack}
-        onVrLinkChange={onVrLinkChange}
+        onOfferVrChange={onOfferVrChange}
         className={className}
       />
     );

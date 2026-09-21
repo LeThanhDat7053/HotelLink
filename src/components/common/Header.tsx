@@ -1,5 +1,5 @@
 import type { FC, CSSProperties } from 'react';
-import { memo, useState, useMemo, useEffect } from 'react';
+import { memo, useState, useMemo, useEffect, useCallback } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { 
   DownOutlined,
@@ -10,13 +10,16 @@ import { Dropdown, Button, Space, Grid } from 'antd';
 import type { MenuProps } from 'antd';
 import { useLanguage, type Language } from '../../context/LanguageContext';
 import { useTheme } from '../../context/ThemeContext';
+import { useSale } from '../../context/SaleContext';
 import { getMenuTranslations } from '../../constants/translations';
+import { resolveContact } from '../../utils/contactResolver';
+import { toTelLink } from './BookingOptionsModal';
 import { useContact } from '../../hooks/useContact';
-import { usePropertyContext } from '../../context/PropertyContext';
 import { useVrHotelSettings } from '../../hooks/useVR360';
 import { useIntroduction } from '../../hooks/useIntroduction';
 import { usePolicy } from '../../hooks/usePolicy';
 import { getLocalizedPath, extractCleanPath } from '../../constants/routes';
+import { appConfig } from '../../config';
 
 const { useBreakpoint } = Grid;
 
@@ -39,11 +42,18 @@ export const Header: FC<HeaderProps> = memo(({ isMenuExpanded = false, onMenuTog
   const location = useLocation();
   const navigate = useNavigate();
   const screens = useBreakpoint();
-  const { property } = usePropertyContext();
-  const { content: contactData } = useContact(property?.id || 0, locale);
-  const { settings: vrHotelSettings, loading: vrSettingsLoading } = useVrHotelSettings(property?.id || null);
-  const { introduction } = useIntroduction(property?.id || null);
-  const { content: policyData } = usePolicy(property?.id || 0, locale);
+  const propertyId = Number(appConfig.PROPERTY_ID || 0);
+  const { content: contactData } = useContact(propertyId, locale);
+  const { settings: vrHotelSettings, loading: vrSettingsLoading } = useVrHotelSettings(propertyId || null);
+  const { saleContact } = useSale();
+  // Contact hiển thị ở social bar: ưu tiên sale (?ref=), fallback hotel.
+  const headerContact = resolveContact(saleContact, {
+    messengerUrl: vrHotelSettings?.messenger_url,
+    zaloPhone: vrHotelSettings?.phone_number,
+    bookingUrl: vrHotelSettings?.booking_url,
+  });
+  const { introduction } = useIntroduction(propertyId || null);
+  const { content: policyData } = usePolicy(propertyId, locale);
 
   // Auto-open menu sau khi settings load xong + delay để smooth (CHỈ desktop)
   useEffect(() => {
@@ -61,6 +71,18 @@ export const Header: FC<HeaderProps> = memo(({ isMenuExpanded = false, onMenuTog
   // Lấy translations theo locale hiện tại
   const t = useMemo(() => getMenuTranslations(locale), [locale]);
 
+  const resolveSectionTitle = useCallback(
+    (sectionKey: string | undefined, fallbackTitle: string) => {
+      if (!sectionKey) {
+        return fallbackTitle;
+      }
+
+      const section = vrHotelSettings?.vr360_settings?.sections?.[sectionKey];
+      return section?.title_translations?.[locale] || section?.vr_title || fallbackTitle;
+    },
+    [locale, vrHotelSettings?.vr360_settings?.sections],
+  );
+
   // Mapping giữa menu path và API page key
   const pageKeyMap: Record<string, string> = {
     '/phong-nghi': 'rooms',
@@ -74,13 +96,14 @@ export const Header: FC<HeaderProps> = memo(({ isMenuExpanded = false, onMenuTog
   const menuItems: MenuItem[] = useMemo(() => {
     const allItems = [
       { path: '/', label: t.home }, // Trang chủ
-      { path: '/gioi-thieu', label: t.about },
-      { path: '/phong-nghi', label: t.rooms },
-      { path: '/am-thuc', label: t.dining },
-      { path: '/tien-ich', label: t.facilities },
-      { path: '/dich-vu', label: t.services },
-      { path: '/chinh-sach', label: t.policy },
-      { path: '/lien-he', label: t.contact },
+      { path: '/gioi-thieu', label: resolveSectionTitle('introduction', t.about) },
+      { path: '/phong-nghi', label: resolveSectionTitle('rooms', t.rooms) },
+      { path: '/am-thuc', label: resolveSectionTitle('dining', t.dining) },
+      { path: '/tien-ich', label: resolveSectionTitle('facilities', t.facilities) },
+      { path: '/dich-vu', label: resolveSectionTitle('services', t.services) },
+      { path: '/uu-dai', label: resolveSectionTitle('offers', t.offers) },
+      { path: '/chinh-sach', label: resolveSectionTitle('policies', t.policy) },
+      { path: '/lien-he', label: resolveSectionTitle('contact', t.contact) },
     ];
 
     // Filter menu items dựa trên is_displaying từ các API
@@ -110,7 +133,7 @@ export const Header: FC<HeaderProps> = memo(({ isMenuExpanded = false, onMenuTog
       // Trang chủ - hiển thị mặc định
       return true;
     });
-  }, [t, vrHotelSettings, introduction, policyData, contactData]);
+  }, [contactData, introduction, policyData, resolveSectionTitle, t, vrHotelSettings]);
 
   // Footer links với translations động theo locale (có thể dùng sau)
   // const footerLinks = useMemo(() => [
@@ -399,7 +422,7 @@ export const Header: FC<HeaderProps> = memo(({ isMenuExpanded = false, onMenuTog
                 menu={{ items: languageMenuItems }}
                 trigger={['hover']}
                 placement="bottomLeft"
-                overlayStyle={{ zIndex: 2100 }}
+                styles={{ root: { zIndex: 2100 } }}
                 classNames={{ root: 'lang-dropdown-custom' }}
               >
                 <Button style={langButtonStyle}>
@@ -521,10 +544,10 @@ export const Header: FC<HeaderProps> = memo(({ isMenuExpanded = false, onMenuTog
               style={{ width: '100%', justifyContent: 'center', margin: '38px 0' }}
               wrap
             >
-              {/* Messenger - Font Awesome icon */}
-              {vrHotelSettings?.messenger_url && (
+              {/* Messenger - chỉ hiện khi KHÔNG có sale (sale không có messenger) */}
+              {headerContact.messengerUrl && (
                 <a
-                  href={vrHotelSettings.messenger_url}
+                  href={headerContact.messengerUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   style={socialBtnStyle}
@@ -543,10 +566,30 @@ export const Header: FC<HeaderProps> = memo(({ isMenuExpanded = false, onMenuTog
                   </svg>
                 </a>
               )}
-              {/* Zalo */}
-              {vrHotelSettings?.phone_number && (
+              {/* Gọi điện - chỉ hiện khi có sale (phone_url) */}
+              {headerContact.phoneUrl && (
                 <a
-                  href={vrHotelSettings.phone_number}
+                  href={toTelLink(headerContact.phoneUrl)}
+                  style={socialBtnStyle}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.color = primaryColor;
+                    e.currentTarget.style.background = 'rgba(255, 255, 255, 0.15)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.color = 'white';
+                    e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)';
+                  }}
+                  title={t.call || 'Gọi điện'}
+                >
+                  <svg viewBox="0 0 24 24" style={{ width: socialIconSize, height: socialIconSize, fill: 'currentColor' }}>
+                    <path d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"/>
+                  </svg>
+                </a>
+              )}
+              {/* Zalo */}
+              {headerContact.zaloPhone && (
+                <a
+                  href={headerContact.zaloPhone}
                   target="_blank"
                   rel="noopener noreferrer"
                   style={socialBtnStyle}

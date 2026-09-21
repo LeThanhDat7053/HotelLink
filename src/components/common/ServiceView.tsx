@@ -13,14 +13,16 @@ import type { ServiceUIData } from '../../types/service';
 interface ServiceViewProps {
   className?: string;
   onTitleChange?: (title: string) => void;
-  onVrLinkChange?: (vrLink: string | null) => void;
+  onServiceVrChange?: (targetId: string | null, panoramaUrl: string | null, vrLink: string | null) => void;
+  onViewingDetailChange?: (isViewing: boolean) => void;
   initialCode?: string; // Code từ URL để hiển thị detail ngay khi load
 }
 
-export const ServiceView: FC<ServiceViewProps> = memo(({ 
+export const ServiceView: FC<ServiceViewProps> = memo(({
   className = '',
   onTitleChange,
-  onVrLinkChange,
+  onServiceVrChange,
+  onViewingDetailChange,
   initialCode
 }) => {
   const [selectedServiceId, setSelectedServiceId] = useState<number | null>(null);
@@ -36,7 +38,8 @@ export const ServiceView: FC<ServiceViewProps> = memo(({
     if (!initialCode) {
       setSelectedServiceId(null);
     }
-  }, [initialCode]);
+    onViewingDetailChange?.(!!initialCode);
+  }, [initialCode, onViewingDetailChange]);
 
   // Fetch service detail by ID when clicked from list
   const { service: serviceById, loading: loadingById, error: errorById } = useServiceDetail({
@@ -53,8 +56,16 @@ export const ServiceView: FC<ServiceViewProps> = memo(({
     enabled: !!currentCode && (selectedServiceId === null || selectedServiceId <= 0),
   });
 
-  // Combine results - prefer serviceById if selected, fallback serviceByCode
-  const service = selectedServiceId && selectedServiceId > 0 ? serviceById : serviceByCode;
+  // Combine results - prefer serviceById if selected, fallback serviceByCode.
+  // Chặn data cũ khi đổi item: bỏ qua nếu id/code không khớp để không emit VR cũ.
+  const service =
+    selectedServiceId && selectedServiceId > 0
+      ? serviceById && serviceById.id === selectedServiceId
+        ? serviceById
+        : null
+      : serviceByCode && (!currentCode || serviceByCode.code === currentCode)
+        ? serviceByCode
+        : null;
   const loading = selectedServiceId && selectedServiceId > 0 ? loadingById : loadingByCode;
   const error = selectedServiceId && selectedServiceId > 0 ? errorById : errorByCode;
 
@@ -65,8 +76,9 @@ export const ServiceView: FC<ServiceViewProps> = memo(({
     const newPath = getLocalizedPath(`${cleanPath}/${service.code}`, locale);
     navigate(newPath, { replace: true });
     onTitleChange?.(service.name);
-    onVrLinkChange?.(service.vrLink);
-  }, [onTitleChange, onVrLinkChange, navigate, location.pathname, locale]);
+    onViewingDetailChange?.(true);
+    onServiceVrChange?.(service.targetId, service.panoramaUrl, service.vrLink);
+  }, [onTitleChange, onViewingDetailChange, onServiceVrChange, navigate, location.pathname, locale]);
 
   const handleBack = useCallback(() => {
     setSelectedServiceId(null);
@@ -76,8 +88,9 @@ export const ServiceView: FC<ServiceViewProps> = memo(({
     navigate(newPath, { replace: true });
     const t = getMenuTranslations(locale);
     onTitleChange?.(t.services);
-    onVrLinkChange?.(null);
-  }, [onTitleChange, onVrLinkChange, navigate, locale]);
+    onServiceVrChange?.(null, null, null);
+    onViewingDetailChange?.(false);
+  }, [onTitleChange, onServiceVrChange, onViewingDetailChange, navigate, locale]);
 
   // Update title when service selected
   useEffect(() => {
@@ -97,12 +110,12 @@ export const ServiceView: FC<ServiceViewProps> = memo(({
   // Show detail view when service is selected (clicked from list)
   if (selectedServiceId !== null && selectedServiceId > 0) {
     return (
-      <ServiceDetail 
-        service={service} 
+      <ServiceDetail
+        service={service}
         loading={loading}
         error={error}
         onBack={handleBack}
-        onVrLinkChange={onVrLinkChange}
+        onServiceVrChange={onServiceVrChange}
         className={className}
       />
     );
@@ -111,12 +124,12 @@ export const ServiceView: FC<ServiceViewProps> = memo(({
   // Show detail view when code is in URL (page load with slug)
   if (currentCode) {
     return (
-      <ServiceDetail 
-        service={service} 
+      <ServiceDetail
+        service={service}
         loading={loading}
         error={error}
         onBack={handleBack}
-        onVrLinkChange={onVrLinkChange}
+        onServiceVrChange={onServiceVrChange}
         className={className}
       />
     );

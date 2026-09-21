@@ -13,10 +13,12 @@ import { useTheme } from '../../context/ThemeContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { getMenuTranslations } from '../../constants/translations';
 import { usePropertyData } from '../../context/PropertyContext';
+import { useSale } from '../../context/SaleContext';
 import { useVrHotelSettings } from '../../hooks/useVR360';
 import { ImageGalleryViewer } from './ImageGalleryViewer';
 import { BookingOptionsModal, getBookingBehavior } from './BookingOptionsModal';
 import { getBookingUrlWithMessage, createBookingMessage, copyToClipboard } from '../../utils/bookingHelper';
+import { resolveContact } from '../../utils/contactResolver';
 import type { RoomUIData } from '../../types/room';
 
 const { Paragraph, Text } = Typography;
@@ -27,14 +29,14 @@ interface RoomDetailProps {
   loading?: boolean;
   error?: Error | null;
   onBack?: () => void;
-  onVrLinkChange?: (vrLink: string | null) => void;
+  onRoomVrChange?: (targetId: string | null, panoramaUrl: string | null, vrLink: string | null) => void;
   className?: string;
   roomCode?: string;
 }
 
-export const RoomDetail: FC<RoomDetailProps> = memo(({ 
+export const RoomDetail: FC<RoomDetailProps> = memo(({
   room,
-  onVrLinkChange,
+  onRoomVrChange,
   loading = false,
   error = null,
   onBack,
@@ -46,6 +48,7 @@ export const RoomDetail: FC<RoomDetailProps> = memo(({
   const t = getMenuTranslations(locale);
   const { propertyId } = usePropertyData();
   const { settings } = useVrHotelSettings(propertyId);
+  const { saleContact } = useSale();
   const [galleryOpen, setGalleryOpen] = useState(false);
   const [galleryIndex, setGalleryIndex] = useState(0);
   const [bookingModalOpen, setBookingModalOpen] = useState(false);
@@ -77,29 +80,43 @@ export const RoomDetail: FC<RoomDetailProps> = memo(({
   // Nếu chỉ có 1 option → redirect trực tiếp
   const handleBooking = useCallback(async () => {
     const itemName = room?.name || '';
-    
-    // Lấy URLs từ settings
-    const messengerUrl = settings?.messenger_url;
-    const zaloPhone = settings?.phone_number;
-    // Ưu tiên booking_url của room, fallback về settings
-    const bookingUrl = room?.bookingUrl || settings?.booking_url;
-    
+
+    // Gộp contact: có sale (?ref=) thì dùng zalo_url/phone_url/booking_url của sale,
+    // ngược lại dùng contact mặc định của hotel (messenger/zalo/booking).
+    const { messengerUrl, zaloPhone, phoneUrl, bookingUrl } = resolveContact(saleContact, {
+      messengerUrl: settings?.messenger_url,
+      zaloPhone: settings?.phone_number,
+      // Ưu tiên booking_url của room, fallback về settings (chỉ áp dụng khi không có sale)
+      bookingUrl: room?.bookingUrl || settings?.booking_url,
+    });
+
     // Check behavior: show modal hay redirect trực tiếp
     const { shouldShowModal, singleOption } = getBookingBehavior(
       messengerUrl,
       zaloPhone,
-      bookingUrl
+      bookingUrl,
+      phoneUrl
     );
-    
+
     // Nếu chỉ có 1 option → redirect trực tiếp
     if (!shouldShowModal && singleOption) {
       let finalUrl = singleOption.url;
-      
+
+      // Gọi điện: tel: → quay số; URL thường → mở tab mới
+      if (singleOption.type === 'phone') {
+        if (finalUrl.startsWith('tel:')) {
+          window.location.href = finalUrl;
+        } else {
+          window.open(finalUrl, '_blank', 'noopener,noreferrer');
+        }
+        return;
+      }
+
       // Xử lý Messenger - thêm pre-fill message
       if (singleOption.type === 'messenger') {
         finalUrl = getBookingUrlWithMessage(singleOption.url, itemName, t.wantToBook);
       }
-      
+
       // Xử lý Zalo - copy message và thêm ?text= parameter
       if (singleOption.type === 'zalo') {
         const bookingMessage = createBookingMessage(itemName, t.wantToBook);
@@ -110,33 +127,31 @@ export const RoomDetail: FC<RoomDetailProps> = memo(({
         const encodedMessage = encodeURIComponent(bookingMessage);
         finalUrl = `${singleOption.url}?text=${encodedMessage}`;
       }
-      
+
       window.open(finalUrl, '_blank', 'noopener,noreferrer');
       return;
     }
-    
+
     // Nếu có nhiều options → show modal
     if (shouldShowModal) {
       setBookingModalOpen(true);
       return;
     }
-    
+
     // Không có option nào
     console.warn('No booking URL available');
-  }, [room?.bookingUrl, room?.name, settings?.messenger_url, settings?.phone_number, settings?.booking_url, t.wantToBook, t.messageCopied]);
+  }, [room?.bookingUrl, room?.name, saleContact, settings?.messenger_url, settings?.phone_number, settings?.booking_url, t.wantToBook, t.messageCopied]);
 
-  // Đổi VR360 background khi vào chi tiết phòng
+  // Emit cả targetId lẫn vrLink lên parent, để App.tsx tự quyết định
+  // ưu tiên local viewer (target_id) hay external link (vr_link)
+  // tuỳ theo khách sạn có local 3DVista hay không
   useEffect(() => {
-    if (room?.vrLink && onVrLinkChange) {
-      onVrLinkChange(room.vrLink);
-    }
-    // Cleanup: reset về null khi unmount
+    if (!room) return;
+    onRoomVrChange?.(room.targetId, room.panoramaUrl, room.vrLink);
     return () => {
-      if (onVrLinkChange) {
-        onVrLinkChange(null);
-      }
+      onRoomVrChange?.(null, null, null);
     };
-  }, [room?.vrLink, onVrLinkChange]);
+  }, [room?.id, room?.targetId, room?.panoramaUrl, room?.vrLink, onRoomVrChange]);
 
   // Styles
   const scrollContainerStyle: CSSProperties = {
@@ -458,9 +473,11 @@ export const RoomDetail: FC<RoomDetailProps> = memo(({
       <BookingOptionsModal
         open={bookingModalOpen}
         onClose={() => setBookingModalOpen(false)}
-        messengerUrl={settings?.messenger_url}
-        zaloPhone={settings?.phone_number}
-        bookingUrl={room?.bookingUrl || settings?.booking_url}
+        {...resolveContact(saleContact, {
+          messengerUrl: settings?.messenger_url,
+          zaloPhone: settings?.phone_number,
+          bookingUrl: room?.bookingUrl || settings?.booking_url,
+        })}
         itemName={room?.name || ''}
         wantToBookText={t.wantToBook}
         messageCopiedText={t.messageCopied}

@@ -26,6 +26,8 @@ export interface ServiceResponse {
   availability: string | null;
   price_info: string | null;
   vr_link: string | null;
+  target_id: string | null;
+  panorama_url: string | null;
   booking_url: string | null;
   status: string;
   display_order: number;
@@ -57,7 +59,9 @@ export interface ServiceUIData {
   
   // VR360
   vrLink: string | null;
-  
+  targetId: string | null;
+  panoramaUrl: string | null;
+
   // Booking
   bookingUrl: string | null;
   

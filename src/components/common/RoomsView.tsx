@@ -13,14 +13,16 @@ import type { RoomUIData } from '../../types/room';
 interface RoomsViewProps {
   className?: string;
   onTitleChange?: (title: string) => void;
-  onVrLinkChange?: (vrLink: string | null) => void;
+  onRoomVrChange?: (targetId: string | null, panoramaUrl: string | null, vrLink: string | null) => void;
+  onViewingDetailChange?: (isViewing: boolean) => void;
   initialCode?: string; // Code from URL passed from App.tsx
 }
 
-export const RoomsView: FC<RoomsViewProps> = memo(({ 
+export const RoomsView: FC<RoomsViewProps> = memo(({
   className = '',
   onTitleChange,
-  onVrLinkChange,
+  onRoomVrChange,
+  onViewingDetailChange,
   initialCode
 }) => {
   const [selectedRoomId, setSelectedRoomId] = useState<number | null>(null);
@@ -35,7 +37,8 @@ export const RoomsView: FC<RoomsViewProps> = memo(({
     if (!initialCode) {
       setSelectedRoomId(null);
     }
-  }, [initialCode]);
+    onViewingDetailChange?.(!!initialCode);
+  }, [initialCode, onViewingDetailChange]);
 
   // Fetch room detail when selected by ID (click từ list)
   const { room: roomById, loading: loadingById, error: errorById } = useRoomDetail({
@@ -53,8 +56,17 @@ export const RoomsView: FC<RoomsViewProps> = memo(({
     enabled: !!currentCode && (selectedRoomId === null || selectedRoomId <= 0),
   });
 
-  // Combine room data: ưu tiên roomById nếu có, fallback roomByCode
-  const room = selectedRoomId && selectedRoomId > 0 ? roomById : roomByCode;
+  // Combine room data: ưu tiên roomById nếu có, fallback roomByCode.
+  // Chặn data cũ: khi đổi phòng, hook giữ data phòng trước trong lúc fetch phòng mới
+  // → phải bỏ qua nếu id/code không khớp, tránh emit VR của phòng cũ (nhảy cảnh sai).
+  const room =
+    selectedRoomId && selectedRoomId > 0
+      ? roomById && roomById.id === selectedRoomId
+        ? roomById
+        : null
+      : roomByCode && (!currentCode || roomByCode.code === currentCode)
+        ? roomByCode
+        : null;
   const loading = selectedRoomId && selectedRoomId > 0 ? loadingById : loadingByCode;
   const error = selectedRoomId && selectedRoomId > 0 ? errorById : errorByCode;
 
@@ -64,7 +76,11 @@ export const RoomsView: FC<RoomsViewProps> = memo(({
     const newPath = getLocalizedPath(`/phong-nghi/${room.code}`, locale);
     navigate(newPath, { replace: true });
     onTitleChange?.(room.name);
-  }, [onTitleChange, navigate, locale]);
+    onViewingDetailChange?.(true);
+    // Emit VR info ngay lập tức từ list data — không chờ fetch detail
+    // để chuyển cảnh mượt như các menu lớn
+    onRoomVrChange?.(room.targetId, room.panoramaUrl, room.vrLink);
+  }, [onTitleChange, onViewingDetailChange, onRoomVrChange, navigate, locale]);
 
   const handleBack = useCallback(() => {
     setSelectedRoomId(null);
@@ -74,7 +90,8 @@ export const RoomsView: FC<RoomsViewProps> = memo(({
     navigate(newPath, { replace: true });
     const t = getMenuTranslations(locale);
     onTitleChange?.(t.rooms);
-  }, [onTitleChange, navigate, locale]);
+    onViewingDetailChange?.(false);
+  }, [onTitleChange, onViewingDetailChange, navigate, locale]);
 
   // Update title when room data changes
   useEffect(() => {
@@ -99,7 +116,7 @@ export const RoomsView: FC<RoomsViewProps> = memo(({
         loading={loading}
         error={error}
         onBack={handleBack}
-        onVrLinkChange={onVrLinkChange}
+        onRoomVrChange={onRoomVrChange}
         className={className}
         roomCode={currentCode}
       />
@@ -114,7 +131,7 @@ export const RoomsView: FC<RoomsViewProps> = memo(({
         loading={loading}
         error={error}
         onBack={handleBack}
-        onVrLinkChange={onVrLinkChange}
+        onRoomVrChange={onRoomVrChange}
         className={className}
         roomCode={currentCode}
       />

@@ -6,6 +6,10 @@ import { useState, useEffect } from 'react';
 import { policyService } from '../services/policyService';
 import type { PolicyUIData } from '../types/policy';
 import { appConfig } from '../config';
+import { browserJsonCache } from '../utils/browserJsonCache';
+
+const getPolicyCacheScope = (propertyId: number, locale: string, tenantCode: string) =>
+  `${tenantCode || appConfig.TENANT_CODE || 'default'}:${propertyId}:${locale}`;
 
 interface UsePolicyResult {
   content: PolicyUIData | null;
@@ -20,7 +24,7 @@ interface UsePolicyResult {
 export function usePolicy(
   propertyId: number,
   locale: string,
-  tenantCode: string = appConfig.TENANT_CODE || ''
+  tenantCode: string = appConfig.TENANT_CODE || appConfig.TENANT_ID || ''
 ): UsePolicyResult {
   const [content, setContent] = useState<PolicyUIData | null>(null);
   const [vr360Link, setVr360Link] = useState<string | null>(null);
@@ -39,12 +43,20 @@ export function usePolicy(
       try {
         setLoading(true);
         setError(null);
+        const cacheKey = `policy:v2:${getPolicyCacheScope(propertyId, locale, tenantCode)}`;
+        const cached = browserJsonCache.get<PolicyUIData>(cacheKey);
+        if (cached) {
+          setContent(cached);
+          setVr360Link(cached.vr360Link);
+          setLoading(false);
+        }
         
         const data = await policyService.getPolicyForUI(propertyId, locale, tenantCode);
         
         if (isMounted) {
           setContent(data);
           setVr360Link(data.vr360Link);
+          browserJsonCache.set(cacheKey, data, appConfig.FRONTEND_CACHE_TTL_HOURS * 60 * 60 * 1000);
         }
       } catch (err) {
         if (isMounted) {

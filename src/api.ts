@@ -6,8 +6,13 @@ import { appConfig } from "./config";
 const API_BASE_URL = appConfig.API_BASE_URL;
 const API_USERNAME = appConfig.API_USERNAME;
 const API_PASSWORD = appConfig.API_PASSWORD;
-const TENANT_CODE = appConfig.TENANT_CODE;
+const TENANT_HEADER_VALUE = appConfig.TENANT_CODE || appConfig.TENANT_ID;
 const PROPERTY_ID = appConfig.PROPERTY_ID;
+const isBrowser = typeof window !== 'undefined';
+const isLocalDevHost =
+  isBrowser &&
+  ['localhost', '127.0.0.1'].includes(window.location.hostname);
+const RUNTIME_API_BASE_URL = isLocalDevHost ? '/api/v1' : API_BASE_URL;
 
 // Mở rộng kiểu config để có thể đánh dấu request đã được thử lại
 interface AuthRequestConfig extends InternalAxiosRequestConfig {
@@ -37,7 +42,7 @@ const isProduction = typeof window !== 'undefined' && window.__SERVER_TOKEN__;
 // DEV LOCAL: Login trực tiếp bằng credentials từ .env
 const loginAndGetToken = async (): Promise<string> => {
   // PRODUCTION MODE: Dùng api-proxy.php
-  if (isProduction || (typeof window !== 'undefined' && window.location.hostname !== 'localhost')) {
+  if (isProduction || !isLocalDevHost) {
     console.log("[AUTH] Getting token from api-proxy.php (production mode)");
     
     try {
@@ -57,7 +62,7 @@ const loginAndGetToken = async (): Promise<string> => {
   }
 
   // DEV LOCAL MODE: Login trực tiếp bằng credentials
-  if (!API_USERNAME || !API_PASSWORD || !API_BASE_URL || !TENANT_CODE) {
+  if (!API_USERNAME || !API_PASSWORD || !API_BASE_URL || !TENANT_HEADER_VALUE) {
     throw new Error("Missing API credentials or Tenant Code");
   }
 
@@ -68,12 +73,12 @@ const loginAndGetToken = async (): Promise<string> => {
 
   try {
     const response = await axios.post(
-      `${API_BASE_URL}/auth/login`,
+      `${RUNTIME_API_BASE_URL}/auth/login`,
       formData.toString(),
       {
         headers: {
           "Content-Type": "application/x-www-form-urlencoded",
-          "x-tenant-code": TENANT_CODE,
+          "x-tenant-code": TENANT_HEADER_VALUE,
         },
       }
     );
@@ -130,10 +135,10 @@ const ensureToken = async (): Promise<string> => {
 // ===== REQUEST INTERCEPTOR (Đã sửa để chỉ sử dụng token) =====
 api.interceptors.request.use(async (config) => {
   // Set baseURL động từ env
-  config.baseURL = API_BASE_URL;
+  config.baseURL = RUNTIME_API_BASE_URL;
   
-  if (TENANT_CODE) {
-    config.headers["x-tenant-code"] = TENANT_CODE;
+  if (TENANT_HEADER_VALUE) {
+    config.headers["x-tenant-code"] = TENANT_HEADER_VALUE;
   }
 
   if (PROPERTY_ID) {

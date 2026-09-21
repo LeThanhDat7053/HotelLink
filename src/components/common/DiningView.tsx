@@ -13,14 +13,16 @@ import type { DiningUIData } from '../../types/dining';
 interface DiningViewProps {
   className?: string;
   onTitleChange?: (title: string) => void;
-  onVrLinkChange?: (vrLink: string | null) => void; // Callback để thông báo vr_link cho parent
+  onDiningVrChange?: (targetId: string | null, panoramaUrl: string | null, vrLink: string | null) => void;
+  onViewingDetailChange?: (isViewing: boolean) => void;
   initialCode?: string; // Code từ URL để hiển thị detail ngay khi load
 }
 
-export const DiningView: FC<DiningViewProps> = memo(({ 
+export const DiningView: FC<DiningViewProps> = memo(({
   className = '',
   onTitleChange,
-  onVrLinkChange,
+  onDiningVrChange,
+  onViewingDetailChange,
   initialCode
 }) => {
   const [selectedDiningId, setSelectedDiningId] = useState<number | null>(null);
@@ -36,7 +38,8 @@ export const DiningView: FC<DiningViewProps> = memo(({
     if (!initialCode) {
       setSelectedDiningId(null);
     }
-  }, [initialCode]);
+    onViewingDetailChange?.(!!initialCode);
+  }, [initialCode, onViewingDetailChange]);
 
   // Fetch dining detail by ID when clicked from list
   const { dining: diningById, loading: loadingById, error: errorById } = useDiningDetail({
@@ -54,8 +57,16 @@ export const DiningView: FC<DiningViewProps> = memo(({
     enabled: !!currentCode && (selectedDiningId === null || selectedDiningId <= 0),
   });
 
-  // Combine results - prefer diningById if selected, fallback diningByCode
-  const dining = selectedDiningId && selectedDiningId > 0 ? diningById : diningByCode;
+  // Combine results - prefer diningById if selected, fallback diningByCode.
+  // Chặn data cũ khi đổi item: bỏ qua nếu id/code không khớp để không emit VR cũ.
+  const dining =
+    selectedDiningId && selectedDiningId > 0
+      ? diningById && diningById.id === selectedDiningId
+        ? diningById
+        : null
+      : diningByCode && (!currentCode || diningByCode.code === currentCode)
+        ? diningByCode
+        : null;
   const loading = selectedDiningId && selectedDiningId > 0 ? loadingById : loadingByCode;
   const error = selectedDiningId && selectedDiningId > 0 ? errorById : errorByCode;
 
@@ -66,8 +77,9 @@ export const DiningView: FC<DiningViewProps> = memo(({
     const newPath = getLocalizedPath(`${cleanPath}/${dining.code}`, locale);
     navigate(newPath, { replace: true });
     onTitleChange?.(dining.name);
-    onVrLinkChange?.(dining.vrLink);
-  }, [onTitleChange, onVrLinkChange, navigate, location.pathname, locale]);
+    onViewingDetailChange?.(true);
+    onDiningVrChange?.(dining.targetId, dining.panoramaUrl, dining.vrLink);
+  }, [onTitleChange, onViewingDetailChange, onDiningVrChange, navigate, location.pathname, locale]);
 
   const handleBack = useCallback(() => {
     setSelectedDiningId(null);
@@ -77,8 +89,9 @@ export const DiningView: FC<DiningViewProps> = memo(({
     navigate(newPath, { replace: true });
     const t = getMenuTranslations(locale);
     onTitleChange?.(t.dining);
-    onVrLinkChange?.(null);
-  }, [onTitleChange, onVrLinkChange, navigate, locale]);
+    onDiningVrChange?.(null, null, null);
+    onViewingDetailChange?.(false);
+  }, [onTitleChange, onDiningVrChange, onViewingDetailChange, navigate, locale]);
 
   // Update title when dining data changes
   useEffect(() => {
@@ -98,12 +111,12 @@ export const DiningView: FC<DiningViewProps> = memo(({
   // Show detail view when dining is selected (clicked from list)
   if (selectedDiningId !== null && selectedDiningId > 0) {
     return (
-      <DiningDetail 
-        dining={dining} 
+      <DiningDetail
+        dining={dining}
         loading={loading}
         error={error}
         onBack={handleBack}
-        onVrLinkChange={onVrLinkChange}
+        onDiningVrChange={onDiningVrChange}
         className={className}
       />
     );
@@ -112,12 +125,12 @@ export const DiningView: FC<DiningViewProps> = memo(({
   // Show detail view when code is in URL (page load with slug)
   if (currentCode) {
     return (
-      <DiningDetail 
-        dining={dining} 
+      <DiningDetail
+        dining={dining}
         loading={loading}
         error={error}
         onBack={handleBack}
-        onVrLinkChange={onVrLinkChange}
+        onDiningVrChange={onDiningVrChange}
         className={className}
       />
     );

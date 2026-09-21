@@ -48,7 +48,9 @@ export function transformFacilityForUI(
     
     // VR360
     vrLink: facility.vr_link,
-    
+    targetId: facility.target_id || null,
+    panoramaUrl: facility.panorama_url || null,
+
     // Meta
     display_order: facility.display_order,
     created_at: facility.created_at,

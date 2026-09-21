@@ -130,16 +130,16 @@ interface OfferDetailProps {
   loading?: boolean;
   error?: Error | null;
   onBack: () => void;
-  onVrLinkChange?: (vrLink: string | null) => void;
+  onOfferVrChange?: (targetId: string | null, panoramaUrl: string | null, vrLink: string | null) => void;
   className?: string;
 }
 
-export const OfferDetail: FC<OfferDetailProps> = memo(({ 
+export const OfferDetail: FC<OfferDetailProps> = memo(({
   offer,
   loading = false,
   error = null,
   onBack,
-  onVrLinkChange,
+  onOfferVrChange,
   className = '',
 }) => {
   const screens = useBreakpoint();
@@ -149,15 +149,11 @@ export const OfferDetail: FC<OfferDetailProps> = memo(({
 
   // Đổi VR360 background khi vào chi tiết
   useEffect(() => {
-    if (offer?.vrLink && onVrLinkChange) {
-      onVrLinkChange(offer.vrLink);
-    }
+    onOfferVrChange?.(offer?.targetId ?? null, offer?.panoramaUrl ?? null, offer?.vrLink ?? null);
     return () => {
-      if (onVrLinkChange) {
-        onVrLinkChange(null);
-      }
+      onOfferVrChange?.(null, null, null);
     };
-  }, [offer?.vrLink, onVrLinkChange]);
+  }, [offer?.id, offer?.targetId, offer?.panoramaUrl, offer?.vrLink, onOfferVrChange]);
 
   // Container styles
   const containerStyle: CSSProperties = {

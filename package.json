@@ -5,8 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build && node scripts/inject-seo.js && node scripts/copy-server-files.js",
-    "build:only": "tsc -b && vite build",
+    "build": "node scripts/cleanup-dist-js.js && tsc -b && vite build && node scripts/inject-seo.js && node scripts/copy-server-files.js",
+    "build:only": "node scripts/cleanup-dist-js.js && tsc -b && vite build",
     "inject-seo": "node scripts/inject-seo.js",
     "setup": "node scripts/setup-new-hotel.js",
     "lint": "eslint .",

@@ -25,6 +25,8 @@ export interface FacilityResponse {
   facility_type: string;
   operating_hours: string | null;
   vr_link: string | null;
+  target_id: string | null;
+  panorama_url: string | null;
   status: string;
   display_order: number;
   translations: Record<string, FacilityTranslations>;
@@ -52,7 +54,9 @@ export interface FacilityUIData {
   
   // VR360
   vrLink: string | null;
-  
+  targetId: string | null;
+  panoramaUrl: string | null;
+
   // Meta
   display_order: number;
   created_at: string;

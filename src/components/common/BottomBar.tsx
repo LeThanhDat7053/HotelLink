@@ -1,10 +1,9 @@
 import type { FC, CSSProperties } from 'react';
-import { memo, useMemo } from 'react';
+import { memo, useMemo, useCallback } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Flex, Grid } from 'antd';
 import { useLanguage } from '../../context/LanguageContext';
 import { useTheme } from '../../context/ThemeContext';
-import { usePropertyContext } from '../../context/PropertyContext';
 import { useRegulation } from '../../hooks/useRegulation';
 import { useVrHotelSettings } from '../../hooks/useVR360';
 import { getMenuTranslations } from '../../constants/translations';
@@ -51,19 +50,31 @@ export const BottomBar: FC<BottomBarProps> = memo(({ className = '' }) => {
   const screens = useBreakpoint();
   const { locale } = useLanguage();
   const { primaryColor } = useTheme();
-  const { property } = usePropertyContext();
   const location = useLocation();
+  const propertyId = Number(appConfig.PROPERTY_ID || 0);
 
   // Fetch data để check isDisplaying
-  const tenantCode = appConfig.TENANT_CODE || '';
-  const { content: regulationData, loading: regulationLoading } = useRegulation(property?.id || 0, locale, tenantCode);
-  const { settings, loading: settingsLoading } = useVrHotelSettings(property?.id || null);
+  const tenantCode = appConfig.TENANT_CODE || appConfig.TENANT_ID || '';
+  const { content: regulationData, loading: regulationLoading } = useRegulation(propertyId, locale, tenantCode);
+  const { settings, loading: settingsLoading } = useVrHotelSettings(propertyId || null);
 
   // Chỉ hiển thị footer khi đã load xong data
   const isDataReady = !regulationLoading && !settingsLoading;
 
   // Lấy translations theo locale hiện tại
   const t = useMemo(() => getMenuTranslations(locale), [locale]);
+
+  const resolveSectionTitle = useCallback(
+    (sectionKey: string | undefined, fallbackTitle: string) => {
+      if (!sectionKey) {
+        return fallbackTitle;
+      }
+
+      const section = settings?.vr360_settings?.sections?.[sectionKey];
+      return section?.title_translations?.[locale] || section?.vr_title || fallbackTitle;
+    },
+    [locale, settings?.vr360_settings?.sections],
+  );
 
   // Check if a path is active
   const isActive = (path: string) => {
@@ -74,9 +85,9 @@ export const BottomBar: FC<BottomBarProps> = memo(({ className = '' }) => {
   // Footer links với translations động theo locale
   const allFooterLinks: FooterLink[] = useMemo(() => [
     { path: '/thu-vien-anh', label: t.gallery },
-    { path: '/noi-quy-khach-san', label: t.regulation },
-    { path: '/uu-dai', label: t.offers },
-  ], [t]);
+    { path: '/noi-quy-khach-san', label: resolveSectionTitle('rules', t.regulation) },
+    { path: '/uu-dai', label: resolveSectionTitle('offers', t.offers) },
+  ], [resolveSectionTitle, t]);
 
   // Filter ra các links có isDisplaying = true
   const visibleFooterLinks = useMemo(() => {

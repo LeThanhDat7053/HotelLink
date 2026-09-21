@@ -8,18 +8,13 @@ import { createContext, useContext, type ReactNode } from 'react';
 import { usePropertyContext } from './PropertyContext';
 import { useVrHotelSettings } from '../hooks/useVR360';
 import { mediaService } from '../services/mediaService';
-
-interface SEOData {
-  meta_title: string;
-  meta_description: string;
-  meta_keywords: string;
-}
+import type { SEOData } from '../types/settings';
 
 interface ThemeContextType {
   primaryColor: string;
   logoUrl: string | null;
   faviconUrl: string | null;
-  seo: Record<string, SEOData> | null;
+  seo: SEOData | null;
   loading: boolean;
 }
 

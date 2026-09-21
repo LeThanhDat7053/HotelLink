@@ -31,3 +31,8 @@ server/token_cache.txt
 *.njsproj
 *.sln
 *.sw?
+
+# Build artifacts nén để upload (không commit)
+*.zip
+deploy.zip
+dist.zip

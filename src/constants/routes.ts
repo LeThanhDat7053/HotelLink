@@ -19,6 +19,7 @@ export const ROUTES = {
   NEWS: '/tin-tuc-su-kien',
   OFFERS: '/uu-dai',
   BOOKING: '/dat-phong',
+  VR360_SCENE_SYNC: '/vr360-scene-sync',
 } as const;
 
 /**

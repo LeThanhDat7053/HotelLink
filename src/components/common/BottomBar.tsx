@@ -1,7 +1,7 @@
 import type { FC, CSSProperties } from 'react';
 import { memo, useMemo, useCallback } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Flex, Grid } from 'antd';
+import { Flex } from 'antd';
 import { useLanguage } from '../../context/LanguageContext';
 import { useTheme } from '../../context/ThemeContext';
 import { useRegulation } from '../../hooks/useRegulation';
@@ -9,8 +9,7 @@ import { useVrHotelSettings } from '../../hooks/useVR360';
 import { getMenuTranslations } from '../../constants/translations';
 import { appConfig } from '../../config';
 import { getLocalizedPath } from '../../constants/routes';
-
-const { useBreakpoint } = Grid;
+import { useLayoutMode } from '../../hooks/useLayoutMode';
 
 interface FooterLink {
   path: string;
@@ -47,7 +46,7 @@ const linkStyleBase: CSSProperties = {
 };
 
 export const BottomBar: FC<BottomBarProps> = memo(({ className = '' }) => {
-  const screens = useBreakpoint();
+  const { screens, isCompactLandscape } = useLayoutMode();
   const { locale } = useLanguage();
   const { primaryColor } = useTheme();
   const location = useLocation();
@@ -111,11 +110,12 @@ export const BottomBar: FC<BottomBarProps> = memo(({ className = '' }) => {
 
   const responsiveFooterStyle: CSSProperties = {
     ...footerStyle,
-    left: screens.md ? 15 : 10,
-    bottom: screens.md ? 15 : 10,
-    width: screens.md ? 522 : screens.sm ? '90%' : 'calc(100% - 20px)',
-    maxWidth: screens.md ? 522 : 450,
-    height: screens.md ? 36 : 32,
+    // Xoay ngang: thấp, gọn, thẳng hàng với InfoBox (panel trái rộng tối đa 440px)
+    left: screens.md && !isCompactLandscape ? 15 : 10,
+    bottom: screens.md && !isCompactLandscape ? 15 : isCompactLandscape ? 8 : 10,
+    width: isCompactLandscape ? 'min(440px, 50vw)' : screens.md ? 522 : screens.sm ? '90%' : 'calc(100% - 20px)',
+    maxWidth: isCompactLandscape ? 440 : screens.md ? 522 : 450,
+    height: isCompactLandscape ? 30 : screens.md ? 36 : 32,
     opacity: isDataReady ? 1 : 0,
     transform: isDataReady ? 'translateY(0)' : 'translateY(10px)',
     transition: 'opacity 0.4s ease, transform 0.4s ease',
@@ -125,7 +125,7 @@ export const BottomBar: FC<BottomBarProps> = memo(({ className = '' }) => {
   const responsiveLinkStyle: CSSProperties = {
     ...linkStyleBase,
     color: primaryColor,
-    fontSize: screens.md ? 13 : screens.sm ? 12 : 11,
+    fontSize: isCompactLandscape ? 11 : screens.md ? 13 : screens.sm ? 12 : 11,
   };
 
   // Không render gì cả nếu đang loading

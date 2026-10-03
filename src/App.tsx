@@ -1,7 +1,7 @@
 import type { FC } from 'react';
-import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { BrowserRouter as Router, Route, Routes, useLocation } from 'react-router-dom';
-import { Grid, Layout, Skeleton } from 'antd';
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { BrowserRouter as Router, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
+import { Layout, Skeleton } from 'antd';
 import {
   AboutContent,
   BottomBar,
@@ -19,10 +19,11 @@ import {
   SEOMeta,
   ServiceView,
   ThreeDVistaBackground,
+  ViewerControls,
 } from './components/common';
 import { OfferView } from './components/common/OfferView';
 import { ThemeInjector } from './components/ThemeInjector';
-import { ROUTES, extractCleanPath } from './constants/routes';
+import { ROUTES, extractCleanPath, getLocalizedPath as localizePath } from './constants/routes';
 import {
   LanguageProvider,
   PropertyProvider,
@@ -45,6 +46,11 @@ import {
 } from './hooks';
 import { useLocale } from './context/LanguageContext';
 import { useVrHotelSettings } from './hooks/useVR360';
+import { useLayoutMode } from './hooks/useLayoutMode';
+import { useVr360Views } from './hooks/useVr360Views';
+import { normalizeViewPath } from './services/vr360ViewStore';
+import { resolveShortLink, shareOgStore, shortLinkPath } from './services/shareOgStore';
+import { appConfig } from './config';
 import { getMenuTranslations } from './constants/translations';
 import { getMediaType, getYouTubeEmbedUrl } from './utils/mediaHelper';
 import { resolvePanoramaNameFromPageSettings } from './utils/vr360SceneResolver';
@@ -52,17 +58,18 @@ import { loadVr360Scenes } from './utils/vr360SceneParser';
 import { getSaleSlugFromUrl } from './utils/saleSlug';
 import VR360SceneSyncPage from './pages/VR360SceneSyncPage';
 import type { Vr360SceneItem } from './types/settings';
+import { getCurrentScene, getTourFromFrame, type ScenePoseEntry } from './utils/vr360Camera';
 
 const HomePage = lazy(() => import('./pages/HomePage'));
 const AboutPage = lazy(() => import('./pages/AboutPage'));
 const RoomsPage = lazy(() => import('./pages/RoomsPage'));
 
 const { Content } = Layout;
-const { useBreakpoint } = Grid;
 
 const AppLayout: FC = () => {
   const location = useLocation();
-  const screens = useBreakpoint();
+  const navigate = useNavigate();
+  const { screens, isDesktop, isCompactLandscape } = useLayoutMode();
   const locale = useLocale();
   const { primaryColor } = useTheme();
   const { vr360Url: defaultVr360Url, propertyName, loading, propertyId } = usePropertyData();
@@ -251,6 +258,9 @@ const AppLayout: FC = () => {
   const requestedSceneFromUrl =
     searchParams.get('viewer') === 'vr360' ? searchParams.get('scene') : null;
   const isStandaloneVrScene = Boolean(requestedSceneFromUrl);
+  // Link share: ?scene=<tên cảnh> trên trang thường — mở cảnh đó mà vẫn giữ giao diện trang
+  const sharedSceneFromUrl =
+    searchParams.get('viewer') === 'vr360' ? null : searchParams.get('scene')?.trim() || null;
   const isSceneSyncRoute = cleanPath === ROUTES.VR360_SCENE_SYNC;
 
   const isHomePage = cleanPath === '/';
@@ -451,7 +461,7 @@ const AppLayout: FC = () => {
     vrHotelSettings?.pages?.services?.vr360_link,
   ]);
 
-  const activePanoramaName = useMemo(() => {
+  const pagePanoramaName = useMemo(() => {
     if (requestedSceneFromUrl) {
       return requestedSceneFromUrl;
     }
@@ -571,6 +581,114 @@ const AppLayout: FC = () => {
     serviceDetailVrLink,
   ]);
 
+  // Cảnh + góc admin đặt riêng cho ĐÚNG trang đang mở (data/vr360-views.json, khoá = đường dẫn).
+  // Đọc từ hosting khách sạn nên backend sập vẫn có. Cảnh không còn trong tour thì bỏ qua.
+  const vr360Views = useVr360Views();
+
+  // ===== Link chia sẻ ngắn /canh/<slug> (data/share-og.json) =====
+  // Vào bằng link ngắn → mở trang thật (cảnh + góc đã lưu của trang đó), giữ query (?utm…).
+  // Production: index.php đã tra sẵn trang đích (_share_target); dev: tra trong file JSON.
+  const shareOg = useSyncExternalStore(shareOgStore.subscribe, shareOgStore.getSnapshot);
+  const [shareOgLoaded, setShareOgLoaded] = useState(false);
+  useEffect(() => {
+    shareOgStore.load().finally(() => setShareOgLoaded(true));
+  }, []);
+
+  const shortLinkSlug = useMemo(() => {
+    const match = cleanPath.match(new RegExp(`^/${appConfig.SHORTLINK_PREFIX}/([a-z0-9-]+)/?$`, 'i'));
+    return match ? match[1].toLowerCase() : null;
+  }, [cleanPath]);
+
+  useEffect(() => {
+    if (!shortLinkSlug) return;
+    const serverTarget = (window.__INITIAL_DATA__ as { _share_target?: string | null } | undefined)?._share_target;
+    const target = serverTarget || resolveShortLink(shareOg, shortLinkSlug);
+    if (!target && !shareOgLoaded) return; // chờ đọc xong file
+    // state.shareSlug: trang này đang được mở TỪ link chia sẻ → dùng góc của link (không phải góc menu)
+    navigate(`${localizePath(target || '/', locale)}${location.search}`, {
+      replace: true,
+      state: target ? { shareSlug: shortLinkSlug } : null,
+    });
+  }, [locale, location.search, navigate, shareOg, shareOgLoaded, shortLinkSlug]);
+
+  // Link để nút Chia sẻ dùng: link ngắn của trang đang xem (nếu admin đã đặt) — tự theo domain
+  const pageShareUrl = useMemo(() => {
+    const urlSlug = shareOg.items[normalizeViewPath(cleanPath)]?.urlSlug;
+    if (!urlSlug) return null;
+    const salePrefix = getSaleSlugFromUrl() ? `/${getSaleSlugFromUrl()}` : '';
+    const langPrefix = locale && locale !== 'vi' ? `/${locale}` : '';
+    return `${window.location.origin}${salePrefix}${langPrefix}${shortLinkPath(urlSlug)}`;
+  }, [cleanPath, locale, shareOg.items]);
+  const pageView = useMemo(() => {
+    const view = vr360Views.views[normalizeViewPath(cleanPath)];
+    if (!view) return null;
+    if (effectiveVrScenes.length === 0) return view;
+
+    // Ưu tiên khớp id; xuất lại tour đổi hết id nên khớp tên để giữ được cấu hình
+    const scene =
+      (view.sceneId && effectiveVrScenes.find((item) => item.id === view.sceneId)) ||
+      effectiveVrScenes.find((item) => item.name === view.sceneName);
+    return scene ? { ...view, sceneName: scene.name } : null;
+  }, [cleanPath, effectiveVrScenes, vr360Views.views]);
+
+  // Vào bằng link chia sẻ /canh/<slug> → cảnh + góc của LINK (góc ảnh OG, admin đặt riêng),
+  // độc lập với góc của menu. Vào từ menu (không có state) → góc của trang như bình thường.
+  // Admin đổi góc của link → link cũ (cùng slug) mở ra góc mới.
+  const shareSlugFromState = (location.state as { shareSlug?: string } | null)?.shareSlug ?? null;
+  const shareView = useMemo(() => {
+    if (!shareSlugFromState) return null;
+    const path = resolveShortLink(shareOg, shareSlugFromState);
+    if (!path || path !== normalizeViewPath(cleanPath)) return null;
+    const pose = shareOg.items[path]?.imagePose;
+    if (!pose) return null; // link chưa có góc riêng (ảnh tải lên / chưa có ảnh) → góc của trang
+    if (effectiveVrScenes.length === 0) return pose;
+    const scene =
+      (pose.sceneId && effectiveVrScenes.find((item) => item.id === pose.sceneId)) ||
+      effectiveVrScenes.find((item) => item.name === pose.sceneName);
+    return scene ? { ...pose, sceneName: scene.name } : null;
+  }, [cleanPath, effectiveVrScenes, shareOg, shareSlugFromState]);
+
+  // Góc đang áp cho trang: link chia sẻ > góc menu (data/vr360-views.json)
+  const activeView = shareView ?? pageView;
+
+  // Cảnh "của trang" khi không có ?scene trên link: cấu hình JSON thắng gán cảnh từ backend
+  const pageSceneName = requestedSceneFromUrl ? pagePanoramaName : activeView?.sceneName ?? pagePanoramaName;
+
+  const activePanoramaName = useMemo(() => {
+    if (!sharedSceneFromUrl) {
+      return pageSceneName;
+    }
+    // Cảnh trong link không còn trong tour (đã xuất lại, đổi tên) → rơi về cảnh của trang
+    const sceneExists =
+      effectiveVrScenes.length === 0 || effectiveVrScenes.some((scene) => scene.name === sharedSceneFromUrl);
+    return sceneExists ? sharedSceneFromUrl : pageSceneName;
+  }, [effectiveVrScenes, pageSceneName, sharedSceneFromUrl]);
+
+  const scenePoses = useMemo<ScenePoseEntry[]>(() => {
+    // Góc theo cảnh (từ API backend) — áp cho mọi nơi vào cảnh đó, kể cả hotspot trong tour
+    const scenePoseList = effectiveVrScenes.flatMap((scene) =>
+      typeof scene.yaw === 'number' && typeof scene.pitch === 'number'
+        ? [{ id: scene.id, name: scene.name, yaw: scene.yaw, pitch: scene.pitch }]
+        : [],
+    );
+    if (!activeView || activePanoramaName !== activeView.sceneName) {
+      return scenePoseList;
+    }
+    // Góc riêng của trang / của link chia sẻ thắng góc chung của cảnh
+    return [
+      { id: activeView.sceneId, name: activeView.sceneName, yaw: activeView.yaw, pitch: activeView.pitch },
+      ...scenePoseList.filter((pose) => pose.name !== activeView.sceneName),
+    ];
+  }, [activePanoramaName, effectiveVrScenes, activeView]);
+
+  const viewerFrameRef = useRef<HTMLIFrameElement | null>(null);
+  // Nút con mắt: ẩn menu / InfoBox / footer để xem trọn tour
+  const [isImmersive, setIsImmersive] = useState(false);
+  const getCurrentSceneName = useCallback(() => {
+    const tour = getTourFromFrame(viewerFrameRef.current);
+    return (tour && getCurrentScene(tour)?.name) || null;
+  }, []);
+
   const isCurrentPageDisplaying = useMemo(() => {
     if (isHomePage || isBookingPage || isGalleryPage || isSceneSyncRoute) {
       return true;
@@ -612,7 +730,11 @@ const AppLayout: FC = () => {
     regulationContent?.isDisplaying,
   ]);
 
-  const shouldUseLocalVr = Boolean(activePanoramaName);
+  // null = đang kiểm tra hosting có bộ tour (assets/vr-data) không. Không có tour mà vẫn
+  // "dùng tour local" thì viewer không bao giờ sẵn sàng → loading vô hạn; nên rơi về nền dự phòng
+  // (vr360_link / ảnh từ backend) ngay khi biết chắc là không có.
+  const [localTourAvailable, setLocalTourAvailable] = useState<boolean | null>(null);
+  const shouldUseLocalVr = Boolean(activePanoramaName) && localTourAvailable !== false;
   const activeExternalVrUrl = shouldUseLocalVr ? null : pageExternalVrUrl || defaultVr360Url;
   const mediaType = useMemo(() => getMediaType(activeExternalVrUrl || ''), [activeExternalVrUrl]);
   const shouldBlockOnVisualReady = !hasVisualBootstrapped;
@@ -714,7 +836,8 @@ const AppLayout: FC = () => {
     };
   }, [activeExternalVrUrl, forceComplete, shouldUseLocalVr]);
 
-  const isDesktop = screens.md;
+  // Chỉ có nghĩa khi đang xem tour local — rời tour thì giao diện tự hiện lại (nút con mắt cũng ẩn)
+  const isImmersiveActive = isImmersive && shouldUseLocalVr && localVrReady;
   const shouldShowInfoBox = isCurrentPageDisplaying
     ? isDesktop
       ? isMenuExpanded
@@ -734,13 +857,13 @@ const AppLayout: FC = () => {
   useEffect(() => {
     if (screens.md !== undefined && !hasInitialized.current) {
       hasInitialized.current = true;
-      if (!screens.md) {
+      if (!isDesktop) {
         setIsMenuExpanded(false);
         setIsInfoBoxVisible(true);
         setUserClosedInfoBox(false);
       }
     }
-  }, [screens.md]);
+  }, [isDesktop, screens.md]);
 
   useEffect(() => {
     if (!isDesktop) {
@@ -757,9 +880,9 @@ const AppLayout: FC = () => {
   return (
     <Layout
       id="page"
+      className="app-viewport"
       style={{
-        width: '100vw',
-        height: '100vh',
+        width: '100%',
         backgroundColor,
         overflow: 'hidden',
         position: 'relative',
@@ -797,6 +920,9 @@ const AppLayout: FC = () => {
                 panoramaName={activePanoramaName}
                 onReadyChange={handleLocalVrReadyChange}
                 showNextPanoButton={isStandaloneVrScene}
+                scenePoses={scenePoses}
+                frameRef={viewerFrameRef}
+                onAvailabilityChange={setLocalTourAvailable}
               />
             </>
           )}
@@ -811,8 +937,8 @@ const AppLayout: FC = () => {
                     position: 'fixed',
                     top: 0,
                     left: 0,
-                    width: '100vw',
-                    height: '100vh',
+                    width: '100%',
+                    height: '100%',
                     objectFit: 'cover',
                     objectPosition: 'center',
                     zIndex: 0,
@@ -830,8 +956,8 @@ const AppLayout: FC = () => {
                     position: 'absolute',
                     top: 0,
                     left: 0,
-                    width: '100vw',
-                    height: '100vh',
+                    width: '100%',
+                    height: '100%',
                     border: 0,
                     zIndex: 0,
                     pointerEvents: 'none',
@@ -852,8 +978,8 @@ const AppLayout: FC = () => {
                     position: 'absolute',
                     top: 0,
                     left: 0,
-                    width: '100vw',
-                    height: '100vh',
+                    width: '100%',
+                    height: '100%',
                     border: 0,
                     zIndex: 0,
                   }}
@@ -884,7 +1010,17 @@ const AppLayout: FC = () => {
         </div>
       </Content>
 
-      {!isStandaloneVrScene && (
+      {shouldUseLocalVr && localVrReady && (
+        <ViewerControls
+          getCurrentSceneName={getCurrentSceneName}
+          pageSceneName={isStandaloneVrScene ? null : pageSceneName}
+          pageShareUrl={isStandaloneVrScene ? null : pageShareUrl}
+          isImmersive={isImmersiveActive}
+          onImmersiveChange={setIsImmersive}
+        />
+      )}
+
+      {!isStandaloneVrScene && !isImmersiveActive && (
         <>
           <Header isMenuExpanded={isMenuExpanded} onMenuToggle={setIsMenuExpanded} />
 
@@ -947,8 +1083,8 @@ const AppLayout: FC = () => {
               onClick={handleOpenInfoBox}
               style={{
                 position: 'fixed',
-                left: screens.md ? 15 : 10,
-                bottom: screens.md ? 65 : 55,
+                left: screens.md && !isCompactLandscape ? 15 : 10,
+                bottom: isCompactLandscape ? 46 : screens.md ? 65 : 55,
                 zIndex: 1998,
                 display: 'flex',
                 alignItems: 'center',

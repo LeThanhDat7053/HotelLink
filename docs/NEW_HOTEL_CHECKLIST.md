@@ -104,6 +104,9 @@ Trước khi giao site cho khách:
 - [ ] Đổi ngôn ngữ hoạt động.
 - [ ] Test trên mobile.
 - [ ] VR360 (nếu có) mở được cảnh đúng.
+- [ ] (VR360) Đặt `VR360_EDITOR_PASSWORD` trong `config.php`, vào `/vr360-scene-sync` lưu thử 1 góc, mở lại trang đó thấy đúng góc; `https://domain.com/data/vr360-views.json` trả về JSON.
+- [ ] (Chia sẻ OG) Đặt `APP_NAME` đúng tên khách sạn trong `config.php`. `curl -s -A facebookexternalhit https://domain.com/phong-nghi | grep og:title` ra `Phòng nghỉ – <tên khách sạn>`; dán link vào Facebook Sharing Debugger thấy đúng tiêu đề / ảnh.
+- [ ] (Link chia sẻ) Trong `/vr360-scene-sync` lưu 1 trang có chụp ảnh → mở `https://domain.com/canh/<slug>` thấy đúng cảnh + góc như ảnh, còn vào trang đó từ menu vẫn là góc của menu; bấm nút Chia sẻ trên website ra đúng link `/canh/<slug>`.
 - [ ] Bàn giao cho khách: đường dẫn admin backend + tài khoản để tự sửa nội dung.
 
 ## 7. Lưu ý bảo mật

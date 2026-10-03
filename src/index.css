@@ -20,6 +20,13 @@ html, body, #root {
   background-color: rgb(249, 250, 251); /* bg-gray-50 - tránh flash đen */
 }
 
+/* Khung toàn màn hình của app: dvh = vùng nhìn thấy thật, không bị thanh địa chỉ
+   của Chrome/Samsung Internet che mất phần dưới (100vh thì bị). Trình duyệt cũ dùng vh. */
+.app-viewport {
+  height: 100vh;
+  height: 100dvh;
+}
+
 body {
   font-family: 'UTMNeoSansIntel', Arial, sans-serif;
   -webkit-font-smoothing: subpixel-antialiased;

@@ -63,7 +63,7 @@ export const ServiceView: FC<ServiceViewProps> = memo(({
       ? serviceById && serviceById.id === selectedServiceId
         ? serviceById
         : null
-      : serviceByCode && (!currentCode || serviceByCode.code === currentCode)
+      : serviceByCode && (!currentCode || serviceByCode.code?.toLowerCase() === currentCode.toLowerCase())
         ? serviceByCode
         : null;
   const loading = selectedServiceId && selectedServiceId > 0 ? loadingById : loadingByCode;

@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>VR360 Angle Picker</title>
+    <style>
+      html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: #111; font-family: Arial, sans-serif; }
+      #tour { position: fixed; inset: 0; width: 100%; height: 100%; border: 0; }
+      #crosshair { position: fixed; left: 50%; top: 50%; width: 22px; height: 22px; margin: -11px 0 0 -11px; pointer-events: none; z-index: 2; }
+      #crosshair::before, #crosshair::after { content: ''; position: absolute; background: rgba(255,255,255,.85); box-shadow: 0 0 2px #000; }
+      #crosshair::before { left: 10px; top: 0; width: 2px; height: 22px; }
+      #crosshair::after { top: 10px; left: 0; height: 2px; width: 22px; }
+      #hud { position: fixed; left: 10px; top: 10px; z-index: 3; display: none; gap: 8px; align-items: center; flex-wrap: wrap;
+             padding: 8px 10px; border-radius: 8px; background: rgba(0,0,0,.72); color: #fff; font-size: 13px; max-width: calc(100% - 40px); }
+      #hud.visible { display: flex; }
+      #hud select, #hud button { font-size: 13px; padding: 3px 6px; }
+      #hud code { font-family: Consolas, monospace; }
+      #status { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; color: #bbb; font-size: 14px; z-index: 1; pointer-events: none; }
+    </style>
+  </head>
+  <body>
+    <div id="status">Đang tải tour VR360…</div>
+    <iframe id="tour" title="VR360" allow="fullscreen; xr-spatial-tracking; gyroscope; accelerometer"></iframe>
+    <div id="crosshair"></div>
+    <div id="hud">
+      <select id="hud-scene" aria-label="Cảnh"></select>
+      <code id="hud-pose">yaw – · pitch – · hfov –</code>
+      <button type="button" id="hud-copy">Copy JSON</button>
+    </div>
+    <script type="module" src="/src/picker/vr360AnglePicker.ts"></script>
+  </body>
+</html>

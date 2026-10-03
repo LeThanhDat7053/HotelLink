@@ -149,6 +149,15 @@ const filterPlaceholderScene = (scene: Record<string, unknown>): boolean => {
   );
 };
 
+// Backend có thể trả số hoặc chuỗi số (DECIMAL); rỗng/không hợp lệ = chưa đặt góc
+const normalizeAngle = (value: unknown): number | null => {
+  if (value === null || value === undefined || value === '') {
+    return null;
+  }
+  const parsed = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
 const normalizeScenes = (
   scenes: Array<Partial<Vr360SceneItem> & Record<string, unknown>> | undefined,
 ): Vr360SceneItem[] => {
@@ -174,6 +183,9 @@ const normalizeScenes = (
             normalizeNullableString(scene.name ?? scene.scene_name) ?? `pano-${index + 1}`,
           )}`,
         order,
+        yaw: normalizeAngle(scene.yaw),
+        pitch: normalizeAngle(scene.pitch),
+        hfov: normalizeAngle(scene.hfov),
       };
     })
     .sort((left, right) => left.order - right.order);

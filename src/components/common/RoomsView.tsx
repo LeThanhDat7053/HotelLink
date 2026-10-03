@@ -64,7 +64,7 @@ export const RoomsView: FC<RoomsViewProps> = memo(({
       ? roomById && roomById.id === selectedRoomId
         ? roomById
         : null
-      : roomByCode && (!currentCode || roomByCode.code === currentCode)
+      : roomByCode && (!currentCode || roomByCode.code?.toLowerCase() === currentCode.toLowerCase())
         ? roomByCode
         : null;
   const loading = selectedRoomId && selectedRoomId > 0 ? loadingById : loadingByCode;

@@ -6,7 +6,7 @@ import {
   CloseOutlined,
   MenuOutlined
 } from '@ant-design/icons';
-import { Dropdown, Button, Space, Grid } from 'antd';
+import { Dropdown, Button, Space } from 'antd';
 import type { MenuProps } from 'antd';
 import { useLanguage, type Language } from '../../context/LanguageContext';
 import { useTheme } from '../../context/ThemeContext';
@@ -20,8 +20,7 @@ import { useIntroduction } from '../../hooks/useIntroduction';
 import { usePolicy } from '../../hooks/usePolicy';
 import { getLocalizedPath, extractCleanPath } from '../../constants/routes';
 import { appConfig } from '../../config';
-
-const { useBreakpoint } = Grid;
+import { useLayoutMode } from '../../hooks/useLayoutMode';
 
 interface HeaderProps {
   className?: string;
@@ -41,7 +40,7 @@ export const Header: FC<HeaderProps> = memo(({ isMenuExpanded = false, onMenuTog
   const { primaryColor } = useTheme();
   const location = useLocation();
   const navigate = useNavigate();
-  const screens = useBreakpoint();
+  const { screens, isDesktop, isCompactLandscape, viewportHeight } = useLayoutMode();
   const propertyId = Number(appConfig.PROPERTY_ID || 0);
   const { content: contactData } = useContact(propertyId, locale);
   const { settings: vrHotelSettings, loading: vrSettingsLoading } = useVrHotelSettings(propertyId || null);
@@ -55,9 +54,9 @@ export const Header: FC<HeaderProps> = memo(({ isMenuExpanded = false, onMenuTog
   const { introduction } = useIntroduction(propertyId || null);
   const { content: policyData } = usePolicy(propertyId, locale);
 
-  // Auto-open menu sau khi settings load xong + delay để smooth (CHỈ desktop)
+  // Auto-open menu sau khi settings load xong + delay để smooth (CHỈ desktop — điện thoại
+  // xoay ngang không tự mở vì menu sẽ che gần hết tour)
   useEffect(() => {
-    const isDesktop = screens.md;
     if (!vrSettingsLoading && vrHotelSettings && isDesktop) {
       // Delay 500ms sau khi settings load xong rồi mở menu (chỉ desktop)
       const timer = setTimeout(() => {
@@ -66,7 +65,7 @@ export const Header: FC<HeaderProps> = memo(({ isMenuExpanded = false, onMenuTog
       
       return () => clearTimeout(timer);
     }
-  }, [vrSettingsLoading, vrHotelSettings, onMenuToggle, screens.md]);
+  }, [vrSettingsLoading, vrHotelSettings, onMenuToggle, isDesktop]);
 
   // Lấy translations theo locale hiện tại
   const t = useMemo(() => getMenuTranslations(locale), [locale]);
@@ -183,8 +182,8 @@ export const Header: FC<HeaderProps> = memo(({ isMenuExpanded = false, onMenuTog
     top: 0,
     right: 0,
     zIndex: 2000, // Cùng level với header
-    width: screens.md ? 280 : screens.sm ? 260 : 240,
-    maxWidth: screens.md ? 280 : screens.sm ? 260 : 240,
+    width: isCompactLandscape ? 240 : screens.md ? 280 : screens.sm ? 260 : 240,
+    maxWidth: isCompactLandscape ? 240 : screens.md ? 280 : screens.sm ? 260 : 240,
     background: '#000000ad',
     backdropFilter: 'blur(2px)',
     WebkitBackdropFilter: 'blur(2px)',
@@ -192,18 +191,21 @@ export const Header: FC<HeaderProps> = memo(({ isMenuExpanded = false, onMenuTog
     pointerEvents: 'auto',
   };
 
+  // Điện thoại xoay ngang: thanh trên thấp hơn để dành chỗ cho danh sách menu
+  const topBarHeight = isCompactLandscape ? 46 : 62;
+
   const menuTopBarStyle: CSSProperties = {
     position: 'relative',
     width: '100%',
-    height: 62,
+    height: topBarHeight,
   };
 
   const langMenuBgStyle: CSSProperties = {
     position: 'absolute',
     left: 16,
-    top: 12,
+    top: isCompactLandscape ? 6 : 12,
     width: 138,
-    height: 37,
+    height: isCompactLandscape ? 34 : 37,
     background: 'rgba(0, 0, 0, 0.3)',
     cursor: 'pointer',
     border: `1px solid ${primaryColor}99`,
@@ -227,8 +229,8 @@ export const Header: FC<HeaderProps> = memo(({ isMenuExpanded = false, onMenuTog
     position: 'absolute',
     top: 0,
     right: 0,
-    width: 62,
-    height: 62,
+    width: topBarHeight,
+    height: topBarHeight,
     overflow: 'hidden',
     background: 'var(--primary-color, #ecc56d)', // Dùng CSS variable để tránh flash
     border: 'none',
@@ -245,7 +247,9 @@ export const Header: FC<HeaderProps> = memo(({ isMenuExpanded = false, onMenuTog
     transition: 'all 300ms linear',
     transform: isMenuExpanded ? 'scaleY(1)' : 'scaleY(0)',
     opacity: isMenuExpanded ? 1 : 0,
-    maxHeight: isMenuExpanded ? 'none' : 0,
+    // Xoay ngang: cả khối (menu + đặt phòng + mạng xã hội) cuộn trong phần màn còn lại
+    maxHeight: isMenuExpanded ? (isCompactLandscape ? viewportHeight - topBarHeight : 'none') : 0,
+    overflowY: isCompactLandscape ? 'auto' : undefined,
   };
 
   // Responsive icon sizes for Messenger/Zalo
@@ -271,7 +275,7 @@ export const Header: FC<HeaderProps> = memo(({ isMenuExpanded = false, onMenuTog
 
 
   return (
-    <header style={headerStyle}>
+    <header style={headerStyle} className={isCompactLandscape ? 'compact-landscape' : undefined}>
       <style>{`
         /* Primary Menu Items CSS */
         .primary-menu {
@@ -298,6 +302,13 @@ export const Header: FC<HeaderProps> = memo(({ isMenuExpanded = false, onMenuTog
           transition: all 300ms linear;
           text-decoration: none;
           background: transparent;
+        }
+
+        .compact-landscape .primary-menu .menu-item a,
+        .compact-landscape .primary-menu .menu-item.has-submenu > div {
+          height: 38px;
+          line-height: 38px;
+          font-size: 12px;
         }
 
         .primary-menu .menu-item a:hover {
@@ -452,7 +463,7 @@ export const Header: FC<HeaderProps> = memo(({ isMenuExpanded = false, onMenuTog
 
           {/* Menu Content - CHỈ PHẦN NÀY MỚI EXPAND/COLLAPSE */}
           <div style={menuContentStyle}>
-            <nav style={{ overflow: 'auto', maxHeight: 'calc(100vh - 220px)' }}>
+            <nav style={{ overflow: 'auto', maxHeight: isCompactLandscape ? 'none' : 'calc(100vh - 220px)' }}>
               <ul className="primary-menu">
                 {menuItems.map((item) => (
                   <li key={item.path} className={`menu-item ${item.children ? 'has-submenu' : ''}`}>
@@ -519,7 +530,7 @@ export const Header: FC<HeaderProps> = memo(({ isMenuExpanded = false, onMenuTog
                 size="large"
                 block
                 style={{
-                  height: 52,
+                  height: isCompactLandscape ? 42 : 52,
                   background: primaryColor,
                   color: 'white',
                   textAlign: 'center',
@@ -541,7 +552,7 @@ export const Header: FC<HeaderProps> = memo(({ isMenuExpanded = false, onMenuTog
             {/* Social Bar - Messenger và Zalo */}
             <Space 
               size={14} 
-              style={{ width: '100%', justifyContent: 'center', margin: '38px 0' }}
+              style={{ width: '100%', justifyContent: 'center', margin: isCompactLandscape ? '12px 0' : '38px 0' }}
               wrap
             >
               {/* Messenger - chỉ hiện khi KHÔNG có sale (sale không có messenger) */}

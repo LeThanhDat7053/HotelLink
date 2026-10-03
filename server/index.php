@@ -2,6 +2,19 @@
 // ===== 1. LOAD CẤU HÌNH TỪ FILE config.php =====
 // Đọc config từ file riêng - có thể chỉnh trên server mà không cần build lại
 require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/_og.php';
+
+// Link ngắn /canh/<slug>: link cũ → 301 ngay (giữ query), không cần gọi API
+$ogContext = og_request_context($_SERVER['REQUEST_URI'] ?? '/');
+$ogShortlink = og_resolve_shortlink($ogContext);
+if ($ogShortlink['redirect'] !== null) {
+    header('Location: ' . $ogShortlink['redirect'], true, 301);
+    exit;
+}
+$ogContext = $ogShortlink['ctx'];
+if ($ogShortlink['status'] === 404) {
+    http_response_code(404);
+}
 
 $API_BASE_URL = API_BASE_URL;
 $API_USERNAME = API_USERNAME;
@@ -19,6 +32,8 @@ function loginAndGetToken($baseUrl, $user, $pass, $tenant) {
     curl_setopt($ch, CURLOPT_POST, true);
     curl_setopt($ch, CURLOPT_POSTFIELDS, $formData);
     curl_setopt($ch, CURLOPT_HTTPHEADER, ["x-tenant-code: $tenant"]);
+    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 10);
     $response = curl_exec($ch);
     $data = json_decode($response, true);
     curl_close($ch);
@@ -26,8 +41,15 @@ function loginAndGetToken($baseUrl, $user, $pass, $tenant) {
 }
 
 function getSettings($baseUrl, $token, $tenant, $propertyId) {
-    $ch = curl_init("$baseUrl/vr-hotel/settings");
+    return apiGetJson($baseUrl, '/vr-hotel/settings', $token, $tenant, $propertyId);
+}
+
+// GET 1 endpoint của API backend; backend chậm/sập thì trả status 0 thay vì treo cả trang
+function apiGetJson($baseUrl, $endpoint, $token, $tenant, $propertyId) {
+    $ch = curl_init($baseUrl . $endpoint);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 10);
     curl_setopt($ch, CURLOPT_HTTPHEADER, [
         "accept: application/json", 
         "x-tenant-code: $tenant", 
@@ -54,16 +76,10 @@ if ($result['status'] === 401) { // Token hết hạn
     $result = getSettings($API_BASE_URL, $authToken, $TENANT_CODE, $PROPERTY_ID);
 }
 
-$data = $result['data'];
+$data = is_array($result['data']) && $result['status'] === 200 ? $result['data'] : [];
 $seo = $data['seo']['vi'] ?? [];
 
-// Dữ liệu Meta từ API
-$title_api = $seo['meta_title'] ?? "Phoenix Hotel Vũng Tàu";
-$desc_api  = $seo['meta_description'] ?? "";
 $key_api   = $seo['meta_keywords'] ?? "";
-// Ưu tiên meta_image_media_id, fallback logo_media_id, không có thì không dùng hình
-$meta_image_id = $seo['meta_image_media_id'] ?? $data['logo_media_id'] ?? null;
-$img_api   = $meta_image_id ? "https://travel.link360.vn/api/v1/media/" . $meta_image_id . "/view" : "";
 // Favicon: ưu tiên favicon_media_id, fallback logo_media_id, không có thì không dùng
 $favicon_id = $data['favicon_media_id'] ?? $data['logo_media_id'] ?? null;
 $fav_api   = $favicon_id ? "https://travel.link360.vn/api/v1/media/" . $favicon_id . "/view" : "";
@@ -73,30 +89,18 @@ if (!file_exists('index.html')) {
 }
 $html = file_get_contents('index.html');
 
-// ===== 4. THAY THẾ CHUỖI (REGEX) =====
-// Thay Title
-$html = preg_replace('/<title>.*?<\/title>/', "<title>$title_api</title>", $html);
+// ===== 4. OPEN GRAPH THEO TỪNG TRANG (SSR — xem _og.php) =====
+// Mỗi trang có tiêu đề / mô tả / ảnh riêng: mặc định từ API + tuỳ chỉnh admin ở data/share-og.json
+$ogApiGet = function ($endpoint) use ($API_BASE_URL, $authToken, $TENANT_CODE, $PROPERTY_ID) {
+    $response = apiGetJson($API_BASE_URL, $endpoint, $authToken, $TENANT_CODE, $PROPERTY_ID);
+    return $response['status'] === 200 && is_array($response['data']) ? $response['data'] : null;
+};
+$og = og_defaults($ogContext, $data, $ogApiGet, $API_BASE_URL);
+$og = og_apply_custom($og, og_read_custom($ogContext['pagePath']), $ogContext['lang']);
+$html = og_inject($html, og_render_block($og, $ogContext, og_origin()), $ogContext['lang']);
 
-// Thay Meta Description, Keywords
-$html = preg_replace('/<meta name="description" content=".*?"/i', '<meta name="description" content="'.$desc_api.'"', $html);
-$html = preg_replace('/<meta name="keywords" content=".*?"/i', '<meta name="keywords" content="'.$key_api.'"', $html);
-
-// Thay Open Graph (Facebook/Zalo)
-$html = preg_replace('/<meta property="og:title" content=".*?"/i', '<meta property="og:title" content="'.$title_api.'"', $html);
-$html = preg_replace('/<meta property="og:description" content=".*?"/i', '<meta property="og:description" content="'.$desc_api.'"', $html);
-// Chỉ thay og:image nếu có hình
-if ($img_api) {
-    $html = preg_replace('/<meta property="og:image" content=".*?"/i', '<meta property="og:image" content="'.$img_api.'"', $html);
-    $html = preg_replace('/<meta property="og:image:secure_url" content=".*?"/i', '<meta property="og:image:secure_url" content="'.$img_api.'"', $html);
-}
-
-// Thay Twitter Meta
-$html = preg_replace('/<meta name="twitter:title" content=".*?"/i', '<meta name="twitter:title" content="'.$title_api.'"', $html);
-$html = preg_replace('/<meta name="twitter:description" content=".*?"/i', '<meta name="twitter:description" content="'.$desc_api.'"', $html);
-// Chỉ thay twitter:image nếu có hình
-if ($img_api) {
-    $html = preg_replace('/<meta name="twitter:image" content=".*?"/i', '<meta name="twitter:image" content="'.$img_api.'"', $html);
-}
+// Keywords (không thuộc OG)
+$html = preg_replace('/<meta name="keywords" content=".*?"/i', '<meta name="keywords" content="'.og_escape((string) $key_api).'"', $html);
 
 // Thay Favicon - chỉ thay nếu có favicon
 if ($fav_api) {
@@ -112,8 +116,12 @@ $data['_config'] = [
     'property_id' => PROPERTY_ID,
     'vr360_cdn' => defined('VR360_CDN_URL') ? VR360_CDN_URL : 'https://travel.link360.vn',
     'site_url' => defined('SITE_BASE_URL') ? SITE_BASE_URL : '',
-    'app_name' => defined('APP_NAME') ? APP_NAME : ''
+    'app_name' => defined('APP_NAME') ? APP_NAME : '',
+    'default_og_image' => defined('DEFAULT_OG_IMAGE') ? DEFAULT_OG_IMAGE : '',
+    'shortlink_prefix' => og_shortlink_prefix(),
 ];
+// Vào bằng link ngắn → React mở đúng trang thật (cảnh + góc đã lưu của trang đó)
+$data['_share_target'] = $ogContext['shortSlug'] !== null ? $ogContext['pagePath'] : null;
 
 $injectData = "<script id='__SERVER_DATA__'>
     window.__SERVER_TOKEN__ = '" . $authToken . "';

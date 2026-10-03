@@ -22,7 +22,11 @@ declare global {
         vr360_cdn?: string;
         site_url?: string;
         app_name?: string;
+        default_og_image?: string;
+        shortlink_prefix?: string;
       };
+      /** Vào bằng link ngắn /canh/<slug> → đường dẫn trang thật (index.php tra sẵn) */
+      _share_target?: string | null;
     };
   }
 }
@@ -68,6 +72,10 @@ export const appConfig = {
   FRONTEND_CACHE_TTL_HOURS: Number(import.meta.env.VITE_FRONTEND_CACHE_TTL_HOURS || '12'),
   SITE_BASE_URL: validUrl(serverConfig?.site_url) || import.meta.env.VITE_SITE_BASE_URL || "",
   APP_NAME: serverConfig?.app_name || import.meta.env.VITE_APP_NAME || "",
+  // Ảnh OG khi trang không có ảnh (DEFAULT_OG_IMAGE trong config.php) — rỗng = ảnh SEO/logo của site
+  DEFAULT_OG_IMAGE: serverConfig?.default_og_image || import.meta.env.VITE_DEFAULT_OG_IMAGE || "",
+  // Link chia sẻ: https://<domain>/<SHORTLINK_PREFIX>/<url_slug> (SHORTLINK_PREFIX trong config.php)
+  SHORTLINK_PREFIX: serverConfig?.shortlink_prefix || import.meta.env.VITE_SHORTLINK_PREFIX || "canh",
   
   // Legacy support
   LOGO_MEDIA_ID: import.meta.env.VITE_LOGO_MEDIA_ID || "",

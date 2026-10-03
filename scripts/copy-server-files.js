@@ -16,6 +16,11 @@ const distDir = path.join(__dirname, '..', 'dist');
 const filesToCopy = [
   'api-proxy.php',
   'index.php',
+  'vr360-views.php',
+  'share-og.php',
+  'share-image.php',
+  '_json_store.php',
+  '_og.php',
   '.htaccess',
   'config.example.php',
 ];

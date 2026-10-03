@@ -134,7 +134,8 @@ export async function getOfferByCode(
   locale: string
 ): Promise<OfferUIData | null> {
   const offers = await getOffers(propertyId, { status: 'active' });
-  const offer = offers.find(o => o.code === code);
+  // Không phân biệt hoa thường — link chia sẻ /canh/… chuyển tới URL viết thường
+  const offer = offers.find(o => o.code?.toLowerCase() === code.toLowerCase());
   
   if (!offer) return null;
   

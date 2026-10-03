@@ -1,14 +1,19 @@
 import { ROUTES, isValidLocale } from '../constants/routes';
+import { appConfig } from '../config';
 
 /**
  * Các segment path top-level đã biết (phong-nghi, am-thuc, ...). Dùng để phân biệt
- * slug của sale với route bình thường.
+ * slug của sale với route bình thường. Gồm cả:
+ * - noi-quy-khach-san: trang có thật (App.tsx) nhưng không nằm trong ROUTES
+ * - tiền tố link chia sẻ ngắn (/canh/<slug>) — khớp OG_ROUTE_SEGMENTS + og_shortlink_prefix() bên PHP
  */
-const KNOWN_ROUTE_SEGMENTS = new Set(
-  Object.values(ROUTES)
+const KNOWN_ROUTE_SEGMENTS = new Set([
+  ...Object.values(ROUTES)
     .map((route) => route.replace(/^\//, ''))
     .filter(Boolean),
-);
+  'noi-quy-khach-san',
+  appConfig.SHORTLINK_PREFIX,
+]);
 
 /**
  * Đọc slug của sale từ segment path đầu tiên.

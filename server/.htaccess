@@ -7,6 +7,25 @@ DirectoryIndex index.php index.html
     Deny from all
 </FilesMatch>
 
+# File thư viện PHP (bắt đầu bằng "_", vd _og.php, _json_store.php): chỉ include, không gọi trực tiếp
+<FilesMatch "^_.*\.php$">
+    Order Allow,Deny
+    Deny from all
+</FilesMatch>
+
+# Góc nhìn VR360 (data/vr360-views.json): chặn file khoá / file tạm của vr360-views.php
+<FilesMatch "\.(lock|tmp)$">
+    Order Allow,Deny
+    Deny from all
+</FilesMatch>
+
+# File JSON góc nhìn luôn đọc bản mới nhất (admin lưu xong là khách thấy ngay)
+<Files "vr360-views.json">
+    <IfModule mod_headers.c>
+        Header set Cache-Control "no-store, no-cache, must-revalidate"
+    </IfModule>
+</Files>
+
 # ===== PERFORMANCE & SECURITY (gop tu out/.htaccess) =====
 
 # Gzip compression
@@ -43,12 +62,26 @@ DirectoryIndex index.php index.html
     Header set Referrer-Policy "strict-origin-when-cross-origin"
 </IfModule>
 
+# Trang chọn góc VR360: CHỈ trang này được dashboard backend nhúng bằng iframe.
+# Đổi domain dashboard thì sửa ở đây và VITE_VR360_PICKER_ALLOWED_ORIGINS.
+<Files "vr360-angle-picker.html">
+    <IfModule mod_headers.c>
+        Header always unset X-Frame-Options
+        Header unset X-Frame-Options
+        Header set Content-Security-Policy "frame-ancestors 'self' https://travel.link360.vn"
+        Header set X-Robots-Tag "noindex, nofollow"
+    </IfModule>
+</Files>
+
 RewriteEngine On
 RewriteBase /
 
 # 2. Cho phép api-proxy.php được truy cập trực tiếp (cần cho frontend)
 RewriteCond %{REQUEST_FILENAME} api-proxy\.php
 RewriteRule ^ - [L]
+
+# 2a. cache/ là cache nội bộ của index.php (dữ liệu OG lấy từ API) — chặn TRƯỚC rule "file thật"
+RewriteRule ^cache/ - [F,L]
 
 # 2b. Toàn bộ assets/vr-data/ và assets/js/ luôn serve static, không qua index.php
 # (parser VR360 cần đọc locale/en.txt, index.htm, script.js từ đây)
@@ -73,6 +106,15 @@ RewriteCond %{REQUEST_FILENAME} -f
 # phải để index.php xử lý
 RewriteCond %{REQUEST_FILENAME} !index\.html
 RewriteRule ^ - [L]
+
+# 3c. share-images/: ảnh chia sẻ chưa có → 404 thật (không trả app shell)
+RewriteCond %{REQUEST_URI} ^/share-images/
+RewriteRule ^ - [R=404,L]
+
+# 3b. data/ chỉ chứa file dữ liệu (vd data/vr360-views.json). File chưa có → 404 thật,
+# KHÔNG trả app shell HTML (200) — nếu không, trình duyệt tưởng có file mà đọc ra HTML.
+RewriteCond %{REQUEST_URI} ^/data/
+RewriteRule ^ - [R=404,L]
 
 # 4. Tất cả những thứ còn lại đẩy về index.php
 RewriteRule ^ index.php [L]

@@ -6,7 +6,7 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
-
+ 
 node_modules
 dist
 dist-ssr
@@ -20,6 +20,12 @@ dist-ssr
 # Server config (chứa API credentials - KHÔNG commit)
 server/config.php
 server/token_cache.txt
+
+# Du lieu goc nhin VR360 (sinh ra khi luu tu /vr360-scene-sync)
+server/data/
+server/share-images/
+server/cache/
+.dev-data/
 
 # Editor directories and files
 .vscode/*
@@ -36,3 +42,6 @@ server/token_cache.txt
 *.zip
 deploy.zip
 dist.zip
+
+# Bao cao noi bo (chua mat khau - khong commit)
+BAO-CAO-*.txt

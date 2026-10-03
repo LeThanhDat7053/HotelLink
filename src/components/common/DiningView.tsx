@@ -64,7 +64,7 @@ export const DiningView: FC<DiningViewProps> = memo(({
       ? diningById && diningById.id === selectedDiningId
         ? diningById
         : null
-      : diningByCode && (!currentCode || diningByCode.code === currentCode)
+      : diningByCode && (!currentCode || diningByCode.code?.toLowerCase() === currentCode.toLowerCase())
         ? diningByCode
         : null;
   const loading = selectedDiningId && selectedDiningId > 0 ? loadingById : loadingByCode;

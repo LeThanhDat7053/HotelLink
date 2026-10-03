@@ -1,11 +1,11 @@
 import type { FC, ReactNode } from 'react';
 import { Children, memo, useState, useRef, useEffect, useCallback } from 'react';
-import { Card, Typography, Divider, Grid, Skeleton } from 'antd';
+import { Card, Typography, Divider, Skeleton } from 'antd';
 import { usePropertyData } from '../../context/PropertyContext';
 import { useTheme } from '../../context/ThemeContext';
+import { useLayoutMode } from '../../hooks/useLayoutMode';
 
 const { Title } = Typography;
-const { useBreakpoint } = Grid;
 
 interface InfoBoxProps {
   className?: string;
@@ -25,7 +25,7 @@ export const InfoBox: FC<InfoBoxProps> = memo(({
   onClose,
 }) => {
   const { primaryColor } = useTheme();
-  const screens = useBreakpoint();
+  const { screens, isDesktop, isCompactLandscape, viewportHeight } = useLayoutMode();
   const { propertyName, description, loading } = usePropertyData();
   
   // State cho expand/collapse
@@ -33,22 +33,27 @@ export const InfoBox: FC<InfoBoxProps> = memo(({
   const [needsExpand, setNeedsExpand] = useState(false); // Có cần hiển thị nút expand không
   const contentRef = useRef<HTMLDivElement>(null);
   
-  // Chỉ hiển thị nút close trên mobile
-  const isMobile = !screens.md;
-  
-  // Chiều cao mặc định (khi chưa expand)
-  const defaultMaxHeight = screens.md ? 318 : 250;
-  
+  // Chỉ hiển thị nút close trên mobile (kể cả điện thoại xoay ngang)
+  const isMobile = !isDesktop;
+
+  // Điện thoại xoay ngang: màn chỉ cao ~360px → panel bên trái, cao vừa đúng màn,
+  // cuộn bên trong, không cần nút mở rộng.
+  const compactTopOffset = 10;
+  const compactTitleAreaHeight = 50;
+
   // Khoảng cách tối thiểu từ top khi expand (header height + padding)
   // Mobile: cách header khoảng 90px, Desktop: 100px
-  const minTopOffset = screens.md ? 100 : 90;
-  
+  const minTopOffset = isCompactLandscape ? compactTopOffset : screens.md ? 100 : 90;
+
   // Chiều cao tối đa của content khi expand = window - top offset - bottom bar - title/divider area (~85px)
-  const bottomOffset = screens.md ? 65 : 55;
-  const titleAreaHeight = screens.md ? 85 : 75;
-  const expandedMaxHeight = typeof window !== 'undefined' 
-    ? window.innerHeight - minTopOffset - bottomOffset - titleAreaHeight
-    : 400;
+  const bottomOffset = isCompactLandscape ? 46 : screens.md ? 65 : 55;
+  const titleAreaHeight = isCompactLandscape ? compactTitleAreaHeight : screens.md ? 85 : 75;
+  const expandedMaxHeight = Math.max(120, viewportHeight - minTopOffset - bottomOffset - titleAreaHeight);
+
+  const actionButtonSize = isCompactLandscape ? 30 : 36;
+
+  // Chiều cao mặc định (khi chưa expand)
+  const defaultMaxHeight = isCompactLandscape ? expandedMaxHeight : screens.md ? 318 : 250;
   
   // Check xem content có overflow không (cần cuộn) → hiển thị nút expand
   // Áp dụng cho cả list page và info page (bao gồm trang chủ, giới thiệu, chính sách,...)
@@ -73,8 +78,8 @@ export const InfoBox: FC<InfoBoxProps> = memo(({
       });
     }
     
-    setNeedsExpand(hasOverflow);
-  }, []);
+    setNeedsExpand(hasOverflow && !isCompactLandscape);
+  }, [isCompactLandscape]);
   
   // Check overflow khi children thay đổi hoặc sau khi render
   useEffect(() => {
@@ -137,11 +142,13 @@ export const InfoBox: FC<InfoBoxProps> = memo(({
       variant="borderless"
       style={{
         position: 'fixed',
-        left: screens.md ? 15 : 10,
-        bottom: screens.md ? 65 : 55,
+        left: screens.md && !isCompactLandscape ? 15 : 10,
+        bottom: bottomOffset,
         // Không set top - để Card tự co giãn theo nội dung từ bottom lên
-        width: screens.md ? 522 : screens.sm ? '90%' : 'calc(100% - 20px)',
-        maxWidth: screens.md ? 522 : 450,
+        width: isCompactLandscape
+          ? 'min(440px, 50vw)'
+          : screens.md ? 522 : screens.sm ? '90%' : 'calc(100% - 20px)',
+        maxWidth: isCompactLandscape ? 440 : screens.md ? 522 : 450,
         zIndex: 1999,
         background: 'rgba(0, 0, 0, 0.68)',
         borderBottomLeftRadius: 22,
@@ -163,7 +170,9 @@ export const InfoBox: FC<InfoBoxProps> = memo(({
     >
       {/* Page Title với nút đóng */}
       <div style={{ 
-        padding: screens.md ? '25px 30px 16px 30px' : '20px 20px 12px 20px',
+        padding: isCompactLandscape
+          ? '8px 10px 6px 16px'
+          : screens.md ? '25px 30px 16px 30px' : '20px 20px 12px 20px',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
@@ -176,7 +185,7 @@ export const InfoBox: FC<InfoBoxProps> = memo(({
             level={2}
             style={{
               color: primaryColor,
-              fontSize: screens.md ? 21 : screens.sm ? 19 : 17,
+              fontSize: isCompactLandscape ? 15 : screens.md ? 21 : screens.sm ? 19 : 17,
               fontFamily: "'UTMCafeta', 'UTMNeoSansIntel', Arial, sans-serif",
               textTransform: 'uppercase',
               letterSpacing: 1,
@@ -201,8 +210,8 @@ export const InfoBox: FC<InfoBoxProps> = memo(({
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                width: 36,
-                height: 36,
+                width: actionButtonSize,
+                height: actionButtonSize,
                 background: 'rgba(255, 255, 255, 0.12)',
                 color: primaryColor,
                 borderRadius: 36,
@@ -241,8 +250,8 @@ export const InfoBox: FC<InfoBoxProps> = memo(({
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                width: 36,
-                height: 36,
+                width: actionButtonSize,
+                height: actionButtonSize,
                 background: primaryColor,
                 color: '#fff',
                 borderRadius: 28,
@@ -262,8 +271,8 @@ export const InfoBox: FC<InfoBoxProps> = memo(({
       <Divider style={{ 
         margin: 0, 
         borderColor: 'rgba(255, 255, 255, 0.28)', 
-        marginLeft: screens.md ? 30 : 20, 
-        marginRight: screens.md ? 30 : 20,
+        marginLeft: isCompactLandscape ? 16 : screens.md ? 30 : 20,
+        marginRight: isCompactLandscape ? 16 : screens.md ? 30 : 20,
       }} />
 
       {/* Page Content */}
@@ -271,7 +280,9 @@ export const InfoBox: FC<InfoBoxProps> = memo(({
         ref={contentRef}
         className={`info-box-content ${isExpanded ? 'info-box-expanded' : ''}`}
         style={{ 
-          padding: screens.md ? '18px 15px 30px 30px' : '15px 10px 20px 20px', 
+          padding: isCompactLandscape
+            ? '10px 8px 12px 16px'
+            : screens.md ? '18px 15px 30px 30px' : '15px 10px 20px 20px',
           // Khi expand: tăng maxHeight lên giới hạn tối đa (cách header), content tự co giãn theo nội dung
           // Nếu nội dung nhiều hơn maxHeight thì scroll
           // Khi không expand: giới hạn maxHeight nhỏ hơn

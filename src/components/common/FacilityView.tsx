@@ -64,7 +64,7 @@ export const FacilityView: FC<FacilityViewProps> = memo(({
       ? facilityById && facilityById.id === selectedFacilityId
         ? facilityById
         : null
-      : facilityByCode && (!currentCode || facilityByCode.code === currentCode)
+      : facilityByCode && (!currentCode || facilityByCode.code?.toLowerCase() === currentCode.toLowerCase())
         ? facilityByCode
         : null;
   const loading = selectedFacilityId && selectedFacilityId > 0 ? loadingById : loadingByCode;

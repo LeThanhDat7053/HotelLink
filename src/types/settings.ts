@@ -26,6 +26,11 @@ export interface Vr360SceneItem {
   subtitle?: string;
   panorama_url: string;
   order: number;
+  /** Góc mở đầu admin đã lưu (độ). null/undefined = dùng góc gốc của tour. */
+  yaw?: number | null;
+  pitch?: number | null;
+  /** Độ zoom lúc lưu — hiện chỉ lưu tham khảo, frontend chưa áp. */
+  hfov?: number | null;
 }
 
 export interface PageSettings {

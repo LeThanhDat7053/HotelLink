@@ -7,6 +7,7 @@
 
 import fs from 'fs';
 import path from 'path';
+import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 import readline from 'readline';
 
@@ -90,6 +91,10 @@ VITE_PROPERTY_ID=${config.propertyId}
 # Authentication
 VITE_API_USERNAME=${config.username}
 VITE_API_PASSWORD=${config.password}
+
+# Mật khẩu LƯU góc VR360 ở /vr360-scene-sync — sinh ngẫu nhiên riêng cho khách sạn này.
+# Trên server: copy CÙNG giá trị vào define('VR360_EDITOR_PASSWORD', '...') trong config.php
+VR360_EDITOR_PASSWORD=${config.editorPassword}
 `;
 
   const envPath = path.join(__dirname, '../.env');
@@ -137,6 +142,8 @@ async function main() {
     siteUrl,
     username,
     password,
+    // Không dùng mật khẩu mặc định chung: file mẫu nằm trong git, ai đọc repo cũng biết
+    editorPassword: crypto.randomBytes(12).toString('base64url'),
   };
   
   // Confirm

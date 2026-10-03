@@ -61,7 +61,7 @@ Trên DirectAdmin:
 
 1. Đăng nhập DirectAdmin → **File Manager**.
 2. Vào thư mục web root: `domains/<ten-domain>/public_html`.
-3. Nếu là deploy lại: xoá nội dung cũ, **nhưng giữ lại `config.php` và `assets/vr-data/`** (xem mục 5).
+3. Nếu là deploy lại: xoá nội dung cũ, **nhưng giữ lại `config.php`, `assets/vr-data/`, `data/` và `share-images/`** (xem mục 5).
 4. Upload `deploy.zip` → chọn file → **Extract**.
 5. Xoá `deploy.zip` sau khi extract.
 
@@ -130,6 +130,9 @@ Những file **tuyệt đối không ghi đè / không xoá** trên server:
 - `config.php` — chứa credentials, không có trong bản build.
 - `token_cache.txt` — sẽ tự sinh lại, nhưng giữ thì tốt hơn.
 - `assets/vr-data/` — bộ export 3DVista rất nặng, không cần upload lại nếu tour không đổi.
+- `data/` — góc nhìn VR360 (`vr360-views.json`) và OG chia sẻ (`share-og.json`) admin đã lưu từ `/vr360-scene-sync`. Chỉ tồn tại trên server, **xoá là mất hết cấu hình đã chỉnh**. Nên tải về sao lưu trước mỗi lần deploy.
+- `share-images/` — ảnh chia sẻ đã chụp / tải lên; OG trong `data/share-og.json` đang trỏ tới các file này.
+- `cache/` — cache dữ liệu OG của `index.php`, xoá thoải mái (tự sinh lại).
 
 Quy trình an toàn:
 
